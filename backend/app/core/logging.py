@@ -9,3 +9,6 @@ def configure_logging(env: str = "dev") -> None:
         level=level,
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     )
+
+    # Keep third-party driver logs from drowning out app logs.
+    logging.getLogger("pymongo").setLevel(logging.WARNING)

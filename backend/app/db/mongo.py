@@ -31,6 +31,20 @@ async def connect_to_mongo() -> None:
         # Ensure basic indexes.
         try:
             await _db["users"].create_index("email", unique=True)
+
+            await _db["profiles"].create_index("user_email", unique=True)
+
+            await _db["resumes"].create_index([("user_email", 1), ("uploaded_at", -1)])
+
+            await _db["resume_feedback"].create_index([("user_email", 1), ("created_at", -1)])
+            await _db["resume_feedback"].create_index("resume_id")
+
+            await _db["jobs"].create_index([("source", 1), ("external_id", 1)], unique=True)
+
+            await _db["applications"].create_index(
+                [("user_email", 1), ("job_source", 1), ("job_external_id", 1)], unique=True
+            )
+            await _db["applications"].create_index([("user_email", 1), ("status", 1)])
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed creating MongoDB indexes: %s", exc)
 

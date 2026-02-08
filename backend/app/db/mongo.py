@@ -27,6 +27,13 @@ async def connect_to_mongo() -> None:
         _client = AsyncIOMotorClient(settings.MONGODB_URI)
         _db = _client[settings.MONGODB_DB]
         await _db.command("ping")
+
+        # Ensure basic indexes.
+        try:
+            await _db["users"].create_index("email", unique=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed creating MongoDB indexes: %s", exc)
+
         logger.info("MongoDB connected")
     except Exception as exc:  # noqa: BLE001
         logger.warning("MongoDB connection failed; continuing without DB: %s", exc)
@@ -44,3 +51,4 @@ async def disconnect_from_mongo() -> None:
 
 def get_database() -> Optional[AsyncIOMotorDatabase]:
     return _db
+

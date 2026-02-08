@@ -17,6 +17,11 @@ class Settings(BaseSettings):
 
     AI_PROVIDER: str = "mock"
 
+    # Auth / JWT
+    JWT_SECRET_KEY: str = "change-me"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
     DEEPSEEK_API_KEY: str | None = None

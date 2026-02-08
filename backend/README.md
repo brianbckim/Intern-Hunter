@@ -10,7 +10,7 @@
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate # alternatively, .\.venv\Scripts\Activate.bat
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -46,6 +46,6 @@ uvicorn app.main:app --reload --port 8000
 Quick test:
 
 ```bash
-curl -s http://127.0.0.1:8000/api/health
-curl -s http://127.0.0.1:8000/api/health/db
+curl -s http://127.0.0.1:8000/api/health # alternatively, curl.exe https://127.0.0.1:8000/api/health
+curl -s http://127.0.0.1:8000/api/health/db # alternatively, curl.exe https://127.0.0.1:8000/api/health/db
 ```

@@ -1,37 +1,32 @@
 import asyncio
-import httpx
-import os
+import json
+from pathlib import Path
 
-from motor.motor_asyncio import AsyncIOMotorClient
+import httpx
 
 URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/refs/heads/dev/.github/scripts/listings.json"
 
-async def main():
-    mongo_uri = os.environ["MONGODB_URI"]
-    mongo_db = os.environ["MONGODB_DB"]
+OUTPUT_PATH = Path("Backend/app/jobs/Intern-Hunter-Listing.json")
 
-    client = AsyncIOMotorClient(mongo_uri)
-    db = client[mongo_db]
 
-    async with httpx.AsyncClient() as http:
-        resp = await http.get(URL)
+async def main() -> None:
+    print("Fetching internship listings...")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(URL)
+        resp.raise_for_status()
         data = resp.json()
 
-    jobs = data.get("internships", [])
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    for job in jobs:
-        await db["jobs"].update_one(
-            {
-                "source": "simplify",
-                "external_id": job.get("id")
-            },
-            {
-                "$set": job
-            },
-            upsert=True
-        )
+    OUTPUT_PATH.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
-    print("Sync complete")
+    print(f"Saved to: {OUTPUT_PATH}")
+    print("Sync complete.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

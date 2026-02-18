@@ -1,32 +1,46 @@
-name: Daily Simplify Sync
+name: Daily Intern Hunter Listing Sync
 
 on:
   schedule:
-    - cron: "0 6 * * *" 
-  workflow_dispatch:     
+    - cron: "0 11 * * *"   # 每天纽约 6AM（当前是UTC+5小时）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: intern-hunter-listing
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
+      - name: Fetch Simplify JSON
         run: |
-          cd Backend
-          pip install -r requirements.txt
+          mkdir -p backend/app/jobs
+          curl -sSL https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/refs/heads/dev/.github/scripts/listings.json \
+            -o backend/app/jobs/Intern-Hunter-Listing.json
 
-      - name: Run Sync Script
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          MONGODB_DB: ${{ secrets.MONGODB_DB }}
+      - name: Validate JSON
         run: |
-          cd Backend
-          python app/jobs/sync_runner.py 
+          python -c "import json; json.load(open('backend/app/jobs/Intern-Hunter-Listing.json')); print('JSON OK')"
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add backend/app/jobs/Intern-Hunter-Listing.json
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git commit -m "auto: update Intern-Hunter-Listing"
+          git push

@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ApiError, listMyResumes, uploadResume, type ResumeListItem } from '../lib/api'
+import { getAccessToken } from '../lib/auth'
 import "./Dashboard.css";
 
 type NavItem = { label: string; href: string; active?: boolean };
@@ -12,11 +15,62 @@ const navItems: NavItem[] = [
 ];
 
 export default function Dashboard() {
+    const navigate = useNavigate()
+    const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+    const [items, setItems] = useState<ResumeListItem[] | null>(null)
+    const [loadingResume, setLoadingResume] = useState(true)
+    const [uploading, setUploading] = useState(false)
+    const [resumeError, setResumeError] = useState<string | null>(null)
+
+    const token = getAccessToken()
+    const latest = useMemo(() => (items && items.length > 0 ? items[0] : null), [items])
+
+    function formatDate(isoOrDate: string): string {
+        const d = new Date(isoOrDate)
+        if (Number.isNaN(d.getTime())) return ''
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    }
+
+    const refreshResumes = useCallback(async () => {
+        setResumeError(null)
+        setLoadingResume(true)
+        try {
+            const list = await listMyResumes()
+            setItems(list)
+        } catch (e) {
+            if (e instanceof ApiError && e.status === 401) {
+                setItems([])
+            } else {
+                setResumeError(e instanceof Error ? e.message : 'Failed to load resume status')
+            }
+        } finally {
+            setLoadingResume(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        void refreshResumes()
+    }, [refreshResumes])
+
+    async function onPickFile(file: File) {
+        setResumeError(null)
+        setUploading(true)
+        try {
+            await uploadResume(file)
+            await refreshResumes()
+        } catch (e) {
+            setResumeError(e instanceof Error ? e.message : 'Upload failed')
+        } finally {
+            setUploading(false)
+        }
+    }
+
     const resume = {
-        uploaded: true,
-        fileName: "resume.pdf",
-        lastUpdated: "Feb 10, 2026",
-        completeness: 82,
+        uploaded: Boolean(latest),
+        fileName: latest?.original_filename ?? '—',
+        lastUpdated: latest ? formatDate(latest.uploaded_at) : '—',
+        completeness: latest ? 100 : 0,
     };
 
     const aiFeedback = [
@@ -57,6 +111,18 @@ export default function Dashboard() {
                 <main className="ih-main">
                     <div className="ih-grid">
                         <Card title="Resume Status" subtitle="Resume uploaded status and quick summary">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    const f = e.target.files?.[0]
+                                    if (f) void onPickFile(f)
+                                    e.currentTarget.value = ''
+                                }}
+                            />
+
                             <div className="ih-row">
                                 <div>
                                     <div className="ih-pill">
@@ -66,6 +132,17 @@ export default function Dashboard() {
                                         File: <strong>{resume.fileName}</strong>
                                     </div>
                                     <div className="ih-muted">Last updated: {resume.lastUpdated}</div>
+                                    {loadingResume ? <div className="ih-muted">Loading…</div> : null}
+                                    {resumeError ? (
+                                        <div className="ih-muted" style={{ marginTop: 8 }}>
+                                            Error: {resumeError}
+                                        </div>
+                                    ) : null}
+                                    {!token ? (
+                                        <div className="ih-muted" style={{ marginTop: 8 }}>
+                                            <Link to="/login">Login</Link> to upload your resume.
+                                        </div>
+                                    ) : null}
                                 </div>
 
                                 <div className="ih-progressWrap">
@@ -81,10 +158,20 @@ export default function Dashboard() {
                             </div>
 
                             <div className="ih-actions">
-                                <button className="ih-btnPrimary">
-                                    {resume.uploaded ? "Update Resume" : "Upload Resume"}
+                                <button
+                                    className="ih-btnPrimary"
+                                    disabled={!token || uploading}
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    {uploading ? 'Uploading…' : resume.uploaded ? "Update Resume" : "Upload Resume"}
                                 </button>
-                                <button className="ih-btnGhost">Request AI Review</button>
+                                <button
+                                    className="ih-btnGhost"
+                                    disabled={!resume.uploaded}
+                                    onClick={() => navigate('/resume')}
+                                >
+                                    Request AI Review
+                                </button>
                             </div>
                         </Card>
 
@@ -199,13 +286,13 @@ function Sidebar({ items }: { items: NavItem[] }) {
         <aside className="ih-sidebar">
             <nav className="ih-nav">
                 {items.map((item) => (
-                    <a
+                    <Link
                         key={item.label}
-                        href={item.href}
+                        to={item.href}
                         className={`ih-navItem ${item.active ? "active" : ""}`}
                     >
                         {item.label}
-                    </a>
+                    </Link>
                 ))}
             </nav>
 

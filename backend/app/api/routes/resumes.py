@@ -12,11 +12,13 @@ from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_user_email
 from app.db.collections import resumes_collection
 from app.db.deps import require_db
 from app.schemas.resume import ResumeDocument
+from app.services.resume_extraction import extract_resume_text
 
 
 router = APIRouter(prefix="/resumes")
@@ -68,7 +70,13 @@ def _validate_upload(file: UploadFile) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Only PDF/DOC/DOCX files are allowed")
 
-    if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
+    # Some clients upload with a generic content type (e.g. application/octet-stream).
+    # We still validate based on filename extension above.
+    if (
+        file.content_type
+        and file.content_type != "application/octet-stream"
+        and file.content_type not in ALLOWED_CONTENT_TYPES
+    ):
         raise HTTPException(status_code=400, detail=f"Unsupported content type: {file.content_type}")
 
 
@@ -95,14 +103,17 @@ async def upload_resume(
     finally:
         await file.close()
 
+    extracted_text = await run_in_threadpool(extract_resume_text, stored_path)
+    analyzed_at = datetime.now(timezone.utc) if extracted_text is not None else None
+
     resume = ResumeDocument(
         user_email=user_email,
         original_filename=original_filename,
         content_type=file.content_type,
         storage_ref=str(stored_path.relative_to(_backend_root())),
-        extracted_text=None,
+        extracted_text=extracted_text,
         uploaded_at=datetime.now(timezone.utc),
-        analyzed_at=None,
+        analyzed_at=analyzed_at,
     )
     doc: dict[str, Any] = resume.model_dump()
     result = await resumes.insert_one(doc)

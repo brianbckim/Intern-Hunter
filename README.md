@@ -33,6 +33,7 @@ This branch adds a basic end-to-end resume flow so we can actually exercise the 
 - This repo is still in a “dev-first” stage: right now we mostly use a single example account to test the resume flow.
   - Email: `example@example.com`
   - Password: `12345678`
+  - Name: `John Smith`
   - (If your local DB is fresh, you may need to register this user once via the UI.)
 - You’ll need MongoDB running for the backend (there’s a Docker Compose setup under `backend/`).
 - Handy routes while testing:

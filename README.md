@@ -17,9 +17,9 @@ This branch adds a basic end-to-end resume flow so we can actually exercise the 
 - On upload, we extract and store plain text for quick inspection
   - PDF: `pdfminer.six`
   - DOCX: `python-docx`
+  - DOC: `antiword`
 - Notes:
   - Some clients upload as `application/octet-stream` (we handle that as long as the extension is valid)
-  - `.doc` uploads are accepted, but text extraction is currently focused on PDF/DOCX
 
 **Frontend**
 
@@ -44,4 +44,3 @@ This branch adds a basic end-to-end resume flow so we can actually exercise the 
   - It always loads your latest uploaded resume and shows `extracted_text` in a textarea
   - Useful when you’re iterating on extraction/parsing and want a quick “does this look sane?” check
 - If uploads work but parsing looks empty, double-check backend dependencies (`pdfminer.six`, `python-docx`) are installed in your backend environment.
-

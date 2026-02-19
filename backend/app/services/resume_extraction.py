@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -53,6 +55,27 @@ def extract_resume_text(file_path: Path) -> str | None:
                             parts.append(cell.text)
 
             raw = "\n".join(parts)
+            text = _normalize_text(raw)
+            return text or None
+
+        if ext == ".doc":
+            # Legacy Word format (.doc). Prefer a small external tool rather than
+            # adding heavy Python dependencies.
+            antiword = shutil.which("antiword")
+            if not antiword:
+                return None
+
+            proc = subprocess.run(
+                [antiword, str(file_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+                check=False,
+            )
+            if proc.returncode != 0:
+                return None
+
+            raw = proc.stdout.decode("utf-8", errors="ignore")
             text = _normalize_text(raw)
             return text or None
 

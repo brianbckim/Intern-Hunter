@@ -101,7 +101,7 @@ export default function ParseTest() {
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24, width: '100%' }}>
         <div className="ih-grid">
-          <Card title="Resume Extraction Viewer" subtitle="Shows extracted_text from backend (Issue #6)">
+          <Card title="Resume Extraction Viewer" subtitle="Shows extracted_text from backend (Issue #6) — PDF/DOC/DOCX">
             {!token ? (
               <div className="ih-muted">
                 You are not logged in. <Link to="/login">Go to Login</Link>
@@ -122,7 +122,7 @@ export default function ParseTest() {
 
             <div className="ih-actions" style={{ marginTop: 0 }}>
               <button className="ih-btnPrimary" disabled={!token || uploading} onClick={() => fileInputRef.current?.click()}>
-                {uploading ? 'Uploading…' : 'Upload PDF/DOCX'}
+                {uploading ? 'Uploading…' : 'Upload PDF/DOC/DOCX'}
               </button>
             </div>
 

@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import ErrorPage from './pages/ErrorPage'
 import Resume from './pages/Resume'
 import ParseTest from './pages/ParseTest'
+import Jobs from './pages/Jobs'
 
 const router = createBrowserRouter([
   { path: '/', element: <Dashboard />, errorElement: <ErrorPage /> },
@@ -12,6 +13,7 @@ const router = createBrowserRouter([
   { path: '/login', element: <Login />, errorElement: <ErrorPage /> },
   { path: '/resume', element: <Resume />, errorElement: <ErrorPage /> },
   { path: '/parse-test', element: <ParseTest />, errorElement: <ErrorPage /> },
+    { path: '/jobs', element: <Jobs />, errorElement: <ErrorPage /> },
 ])
 
 export default router

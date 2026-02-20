@@ -2,17 +2,29 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, listMyResumes, uploadResume, type ResumeListItem } from '../lib/api'
 import { getAccessToken } from '../lib/auth'
+import AppLayout from '../components/AppLayout'
 import "./Dashboard.css";
 
-type NavItem = { label: string; href: string; active?: boolean };
+function friendlyResumeError(errorValue: unknown): string {
+    if (errorValue instanceof ApiError) {
+        if (errorValue.status === 401) {
+            return 'Please login again to access resume features.'
+        }
+        if (errorValue.status === 503 || errorValue.message.includes('MongoDB is not configured')) {
+            return 'Resume services are temporarily unavailable. Please start MongoDB or use the updated local fallback backend.'
+        }
+        return errorValue.message || 'Failed to load resume status.'
+    }
 
-const navItems: NavItem[] = [
-    { label: "Dashboard", href: "/", active: true },
-    { label: "Resume", href: "/resume" },
-    { label: "Jobs", href: "/jobs" },
-    { label: "Applications", href: "/applications" },
-    { label: "Settings", href: "/settings" },
-];
+    if (errorValue instanceof Error) {
+        if (errorValue.message.includes('MongoDB is not configured')) {
+            return 'Resume services are temporarily unavailable. Please start MongoDB or use the updated local fallback backend.'
+        }
+        return errorValue.message
+    }
+
+    return 'Failed to load resume status.'
+}
 
 export default function Dashboard() {
     const navigate = useNavigate()
@@ -42,7 +54,7 @@ export default function Dashboard() {
             if (e instanceof ApiError && e.status === 401) {
                 setItems([])
             } else {
-                setResumeError(e instanceof Error ? e.message : 'Failed to load resume status')
+                setResumeError(friendlyResumeError(e))
             }
         } finally {
             setLoadingResume(false)
@@ -60,7 +72,7 @@ export default function Dashboard() {
             await uploadResume(file)
             await refreshResumes()
         } catch (e) {
-            setResumeError(e instanceof Error ? e.message : 'Upload failed')
+            setResumeError(friendlyResumeError(e))
         } finally {
             setUploading(false)
         }
@@ -104,12 +116,8 @@ export default function Dashboard() {
     ];
 
     return (
-        <div className="ih-shell">
-            <TopBar />
-            <div className="ih-body">
-                <Sidebar items={navItems} />
-                <main className="ih-main">
-                    <div className="ih-grid">
+        <AppLayout pageLabel="Dashboard" activeNav="dashboard">
+            <div className="ih-grid">
                         <Card title="Resume Status" subtitle="Resume uploaded status and quick summary">
                             <input
                                 ref={fileInputRef}
@@ -135,7 +143,7 @@ export default function Dashboard() {
                                     {loadingResume ? <div className="ih-muted">Loading…</div> : null}
                                     {resumeError ? (
                                         <div className="ih-muted" style={{ marginTop: 8 }}>
-                                            Error: {resumeError}
+                                            {resumeError}
                                         </div>
                                     ) : null}
                                     {!token ? (
@@ -247,62 +255,8 @@ export default function Dashboard() {
                                 <button className="ih-btnGhost">Dismiss</button>
                             </div>
                         </Card>
-                    </div>
-                </main>
             </div>
-        </div>
-    );
-}
-
-function TopBar() {
-    return (
-        <header className="ih-topbar">
-            <div className="ih-brand">
-                <div className="ih-logo">IH</div>
-                <div>
-                    <div className="ih-brandName">InternHunter</div>
-                    <div className="ih-muted">Dashboard</div>
-                </div>
-            </div>
-
-            <div className="ih-topActions">
-                <button className="ih-btnGhost">Notifications</button>
-                <div className="ih-user">
-                    <div className="ih-avatar" aria-label="User avatar">
-                        U
-                    </div>
-                    <div className="ih-userText">
-                        <div className="ih-userName">User</div>
-                        <div className="ih-muted">Student</div>
-                    </div>
-                </div>
-            </div>
-        </header>
-    );
-}
-
-function Sidebar({ items }: { items: NavItem[] }) {
-    return (
-        <aside className="ih-sidebar">
-            <nav className="ih-nav">
-                {items.map((item) => (
-                    <Link
-                        key={item.label}
-                        to={item.href}
-                        className={`ih-navItem ${item.active ? "active" : ""}`}
-                    >
-                        {item.label}
-                    </Link>
-                ))}
-            </nav>
-
-            <div className="ih-sidebarFooter">
-                <div className="ih-muted">Tip</div>
-                <div className="ih-sidebarTip">
-                    Keep your resume updated before applying to new roles.
-                </div>
-            </div>
-        </aside>
+        </AppLayout>
     );
 }
 

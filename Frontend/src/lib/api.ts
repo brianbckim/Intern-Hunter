@@ -1,5 +1,15 @@
 import { getAccessToken } from './auth'
 
+export const API_ENDPOINTS = {
+  auth: {
+    login: '/api/auth/login',
+    register: '/api/auth/register',
+  },
+  profile: {
+    me: '/api/profile/me',
+  },
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -50,7 +60,7 @@ async function apiJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise
 export type TokenResponse = { access_token: string; token_type: string }
 
 export async function login(email: string, password: string): Promise<TokenResponse> {
-  return apiJson<TokenResponse>('/api/auth/login', {
+  return apiJson<TokenResponse>(API_ENDPOINTS.auth.login, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -62,10 +72,40 @@ export async function register(
   password: string,
   fullName?: string
 ): Promise<TokenResponse> {
-  return apiJson<TokenResponse>('/api/auth/register', {
+  return apiJson<TokenResponse>(API_ENDPOINTS.auth.register, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, full_name: fullName ?? null }),
+  })
+}
+
+export type UserProfile = {
+  user_email: string
+  name: string | null
+  major_or_program: string | null
+  career_interests: string | null
+  skills: string[]
+  graduation_year: number | null
+  updated_at: string
+}
+
+export type UserProfileUpdate = {
+  name: string | null
+  major_or_program: string | null
+  career_interests: string | null
+  skills: string[]
+  graduation_year: number | null
+}
+
+export async function getMyProfile(): Promise<UserProfile> {
+  return apiJson<UserProfile>(API_ENDPOINTS.profile.me)
+}
+
+export async function updateMyProfile(payload: UserProfileUpdate): Promise<UserProfile> {
+  return apiJson<UserProfile>(API_ENDPOINTS.profile.me, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
 }
 
@@ -101,6 +141,8 @@ export type ResumeUploadResponse = {
   }
 }
 
+type UploadProgressCallback = (percent: number) => void
+
 export async function listMyResumes(): Promise<ResumeListItem[]> {
   return apiJson<ResumeListItem[]>('/api/resumes/me')
 }
@@ -109,15 +151,60 @@ export async function getResume(resumeId: string): Promise<ResumeDetail> {
   return apiJson<ResumeDetail>(`/api/resumes/${resumeId}`)
 }
 
-export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
+export async function reextractResume(resumeId: string): Promise<ResumeDetail> {
+  return apiJson<ResumeDetail>(`/api/resumes/${resumeId}/reextract`, {
+    method: 'POST',
+  })
+}
+
+export async function uploadResumeWithProgress(
+  file: File,
+  onProgress?: UploadProgressCallback
+): Promise<ResumeUploadResponse> {
+  const token = getAccessToken()
   const form = new FormData()
   form.append('file', file)
 
-  const res = await apiFetch('/api/resumes/upload', { method: 'POST', body: form })
-  if (!res.ok) {
-    throw new ApiError(res.status, await readErrorMessage(res))
-  }
-  return (await res.json()) as ResumeUploadResponse
+  return new Promise<ResumeUploadResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/resumes/upload')
+    xhr.responseType = 'json'
+
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress || !event.lengthComputable) return
+      onProgress(Math.round((event.loaded / event.total) * 100))
+    }
+
+    xhr.onload = () => {
+      const responseData = xhr.response
+      if (xhr.status >= 200 && xhr.status < 300 && responseData) {
+        resolve(responseData as ResumeUploadResponse)
+        return
+      }
+
+      const detail =
+        responseData && typeof responseData === 'object' && 'detail' in responseData
+          ? (responseData as { detail?: unknown }).detail
+          : null
+      const message =
+        typeof detail === 'string' ? detail : xhr.statusText || `Upload failed (HTTP ${xhr.status || 0})`
+      reject(new ApiError(xhr.status || 0, message))
+    }
+
+    xhr.onerror = () => {
+      reject(new ApiError(0, 'Network error while uploading resume'))
+    }
+
+    xhr.send(form)
+  })
+}
+
+export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
+  return uploadResumeWithProgress(file)
 }
 
 function parseFilenameFromContentDisposition(value: string | null): string | null {
@@ -144,5 +231,19 @@ export async function downloadResumeFile(
   const filename =
     parseFilenameFromContentDisposition(cd) ||
     `resume-${resumeId}.${contentType?.includes('pdf') ? 'pdf' : 'bin'}`
+  return { blob, filename, contentType }
+}
+
+export async function downloadResumePreviewFile(
+  resumeId: string
+): Promise<{ blob: Blob; filename: string; contentType: string | null }> {
+  const res = await apiFetch(`/api/resumes/${resumeId}/preview-file`)
+  if (!res.ok) {
+    throw new ApiError(res.status, await readErrorMessage(res))
+  }
+  const blob = await res.blob()
+  const contentType = res.headers.get('content-type')
+  const cd = res.headers.get('content-disposition')
+  const filename = parseFilenameFromContentDisposition(cd) || `resume-${resumeId}-preview.pdf`
   return { blob, filename, contentType }
 }

@@ -15,6 +15,8 @@ class ResumeDocument(BaseModel):
 
     # Storage is intentionally abstracted for now (local file, S3, etc.)
     storage_ref: str | None = Field(default=None, max_length=2000)
+    preview_storage_ref: str | None = Field(default=None, max_length=2000)
+    preview_content_type: str | None = Field(default=None, max_length=200)
 
     extracted_text: str | None = Field(default=None, max_length=200000)
 

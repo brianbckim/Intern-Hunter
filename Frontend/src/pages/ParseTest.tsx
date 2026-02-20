@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 
 import { ApiError, getResume, listMyResumes, uploadResume, type ResumeDetail } from '../lib/api'
 import { getAccessToken } from '../lib/auth'
+import AppLayout from '../components/AppLayout'
 import './Dashboard.css'
 
 function formatDate(isoOrDate: string | null | undefined): string {
@@ -79,81 +80,59 @@ export default function ParseTest() {
   }
 
   return (
-    <div className="ih-shell">
-      <header className="ih-topbar">
-        <div className="ih-brand">
-          <div className="ih-logo">IH</div>
-          <div>
-            <div className="ih-brandName">InternHunter</div>
-            <div className="ih-muted">Parse Test</div>
+    <AppLayout pageLabel="Parse Test">
+      <div className="ih-grid">
+        <Card title="Resume Extraction Viewer" subtitle="Shows extracted_text from backend (Issue #6) — PDF/DOC/DOCX">
+          {!token ? (
+            <div className="ih-muted">
+              You are not logged in. <Link to="/login">Go to Login</Link>
+            </div>
+          ) : null}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void onPickFile(f)
+              e.currentTarget.value = ''
+            }}
+          />
+
+          <div className="ih-actions" style={{ marginTop: 0 }}>
+            <button className="ih-btnPrimary" disabled={!token || uploading} onClick={() => fileInputRef.current?.click()}>
+              {uploading ? 'Uploading…' : 'Upload PDF/DOC/DOCX'}
+            </button>
           </div>
-        </div>
 
-        <div className="ih-topActions">
-          <Link className="ih-btnGhost" to="/">
-            Dashboard
-          </Link>
-          <Link className="ih-btnGhost" to="/resume">
-            Resume
-          </Link>
-        </div>
-      </header>
+          <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+            {loading ? <div className="ih-muted">Loading latest…</div> : null}
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24, width: '100%' }}>
-        <div className="ih-grid">
-          <Card title="Resume Extraction Viewer" subtitle="Shows extracted_text from backend (Issue #6) — PDF/DOC/DOCX">
-            {!token ? (
-              <div className="ih-muted">
-                You are not logged in. <Link to="/login">Go to Login</Link>
-              </div>
-            ) : null}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) void onPickFile(f)
-                e.currentTarget.value = ''
-              }}
-            />
-
-            <div className="ih-actions" style={{ marginTop: 0 }}>
-              <button className="ih-btnPrimary" disabled={!token || uploading} onClick={() => fileInputRef.current?.click()}>
-                {uploading ? 'Uploading…' : 'Upload PDF/DOC/DOCX'}
-              </button>
+            <div className="ih-muted">
+              file: <strong>{detail?.original_filename ?? '—'}</strong> · uploaded_at:{' '}
+              <strong>{formatDate(detail?.uploaded_at)}</strong> · analyzed_at: <strong>{formatDate(detail?.analyzed_at)}</strong>{' '}
+              · extracted_text length: <strong>{extractedLen}</strong>
             </div>
 
-            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-              {loading ? <div className="ih-muted">Loading latest…</div> : null}
+            {extractedText ? (
+              <textarea
+                className="ih-input"
+                value={extractedText}
+                readOnly
+                rows={18}
+                style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
+              />
+            ) : (
+              <div className="ih-muted">No extracted_text found for the selected resume.</div>
+            )}
 
-              <div className="ih-muted">
-                file: <strong>{detail?.original_filename ?? '—'}</strong> · uploaded_at:{' '}
-                <strong>{formatDate(detail?.uploaded_at)}</strong> · analyzed_at:{' '}
-                <strong>{formatDate(detail?.analyzed_at)}</strong> · extracted_text length:{' '}
-                <strong>{extractedLen}</strong>
-              </div>
-
-              {extractedText ? (
-                <textarea
-                  className="ih-input"
-                  value={extractedText}
-                  readOnly
-                  rows={18}
-                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
-                />
-              ) : (
-                <div className="ih-muted">No extracted_text found for the selected resume.</div>
-              )}
-
-              {error ? <div className="ih-muted">Error: {error}</div> : null}
-            </div>
-          </Card>
-        </div>
+            {error ? <div className="ih-muted">Error: {error}</div> : null}
+          </div>
+        </Card>
       </div>
-    </div>
+    </AppLayout>
   )
 }
 

@@ -68,6 +68,14 @@ Mongo collections (high-level):
 - `jobs`: normalized job listings (unique `(source, external_id)`)
 - `applications`: application tracking (unique `(user_email, job_source, job_external_id)`, indexed by `(user_email, status)`)
 
+## Local fallback (no Mongo)
+
+If MongoDB is not running, auth/profile endpoints now fall back to a local JSON store for development:
+
+- File path: `backend/data/dev_store.json`
+- Supported in fallback mode: register/login and profile read/update
+- Not supported in fallback mode: resume upload/list and other DB-dependent features
+
 ## Endpoints
 
 - `GET /api/health`

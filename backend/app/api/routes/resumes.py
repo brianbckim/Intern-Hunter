@@ -16,8 +16,13 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_user_email
 from app.db.collections import resumes_collection
-from app.db.deps import require_db
+from app.db.local_store import create_resume as create_local_resume
+from app.db.local_store import get_resume_by_id_for_user as get_local_resume_by_id_for_user
+from app.db.local_store import list_resumes_by_user as list_local_resumes_by_user
+from app.db.local_store import update_resume_by_id_for_user as update_local_resume_by_id_for_user
+from app.db.mongo import get_database
 from app.schemas.resume import ResumeDocument
+from app.services.resume_conversion import convert_doc_to_pdf
 from app.services.resume_extraction import extract_resume_text
 
 
@@ -61,6 +66,14 @@ def _uploads_root() -> Path:
     return _backend_root() / "uploads"
 
 
+def _parse_datetime(value: str | datetime | None) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return datetime.now(timezone.utc)
+
+
 def _validate_upload(file: UploadFile) -> None:
     filename = (file.filename or "").strip()
     if not filename:
@@ -87,8 +100,7 @@ async def upload_resume(
 ) -> ResumeUploadResponse:
     _validate_upload(file)
 
-    db = require_db()
-    resumes = resumes_collection(db)
+    db = get_database()
 
     user_segment = _safe_segment(user_email)
     original_filename = (file.filename or "resume").strip()
@@ -103,21 +115,49 @@ async def upload_resume(
     finally:
         await file.close()
 
+    preview_storage_ref: str | None = None
+    preview_content_type: str | None = None
+    if ext == ".doc":
+        converted_path = await run_in_threadpool(convert_doc_to_pdf, stored_path, stored_path.parent)
+        if converted_path is not None:
+            preview_storage_ref = str(converted_path.relative_to(_backend_root()))
+            preview_content_type = "application/pdf"
+
     extracted_text = await run_in_threadpool(extract_resume_text, stored_path)
     analyzed_at = datetime.now(timezone.utc) if extracted_text is not None else None
 
+    uploaded_at = datetime.now(timezone.utc)
     resume = ResumeDocument(
         user_email=user_email,
         original_filename=original_filename,
         content_type=file.content_type,
         storage_ref=str(stored_path.relative_to(_backend_root())),
+        preview_storage_ref=preview_storage_ref,
+        preview_content_type=preview_content_type,
         extracted_text=extracted_text,
-        uploaded_at=datetime.now(timezone.utc),
+        uploaded_at=uploaded_at,
         analyzed_at=analyzed_at,
     )
-    doc: dict[str, Any] = resume.model_dump()
-    result = await resumes.insert_one(doc)
-    resume_id = str(result.inserted_id)
+
+    if db is None:
+        resume_id = create_local_resume(
+            {
+                "user_email": user_email,
+                "original_filename": original_filename,
+                "content_type": file.content_type,
+                "storage_ref": str(stored_path.relative_to(_backend_root())),
+                "preview_storage_ref": preview_storage_ref,
+                "preview_content_type": preview_content_type,
+                "extracted_text": extracted_text,
+                "uploaded_at": uploaded_at.isoformat(),
+                "analyzed_at": analyzed_at.isoformat() if analyzed_at else None,
+            }
+        )
+    else:
+        resumes = resumes_collection(db)
+        doc: dict[str, Any] = resume.model_dump()
+        result = await resumes.insert_one(doc)
+        resume_id = str(result.inserted_id)
 
     return ResumeUploadResponse(resume_id=resume_id, resume=resume)
 
@@ -130,21 +170,34 @@ async def list_my_resumes(
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
 
-    db = require_db()
-    resumes = resumes_collection(db)
-
-    cursor = resumes.find({"user_email": user_email}).sort("uploaded_at", -1).limit(limit)
     items: list[ResumeListItem] = []
-    async for doc in cursor:
-        items.append(
-            ResumeListItem(
-                resume_id=str(doc.get("_id")),
-                original_filename=str(doc.get("original_filename", "")),
-                content_type=doc.get("content_type"),
-                uploaded_at=doc.get("uploaded_at"),
-                analyzed_at=doc.get("analyzed_at"),
+
+    db = get_database()
+    if db is None:
+        rows = list_local_resumes_by_user(user_email=user_email, limit=limit)
+        for doc in rows:
+            items.append(
+                ResumeListItem(
+                    resume_id=str(doc.get("resume_id")),
+                    original_filename=str(doc.get("original_filename", "")),
+                    content_type=doc.get("content_type"),
+                    uploaded_at=_parse_datetime(doc.get("uploaded_at")),
+                    analyzed_at=_parse_datetime(doc.get("analyzed_at")) if doc.get("analyzed_at") else None,
+                )
             )
-        )
+    else:
+        resumes = resumes_collection(db)
+        cursor = resumes.find({"user_email": user_email}).sort("uploaded_at", -1).limit(limit)
+        async for doc in cursor:
+            items.append(
+                ResumeListItem(
+                    resume_id=str(doc.get("_id")),
+                    original_filename=str(doc.get("original_filename", "")),
+                    content_type=doc.get("content_type"),
+                    uploaded_at=doc.get("uploaded_at"),
+                    analyzed_at=doc.get("analyzed_at"),
+                )
+            )
     return items
 
 
@@ -153,19 +206,24 @@ async def get_resume(
     resume_id: str,
     user_email: str = Depends(get_current_user_email),
 ) -> dict[str, Any]:
-    db = require_db()
-    resumes = resumes_collection(db)
+    db = get_database()
 
-    try:
-        oid = ObjectId(resume_id)
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid resume_id")
+    if db is None:
+        doc = get_local_resume_by_id_for_user(resume_id=resume_id, user_email=user_email)
+    else:
+        resumes = resumes_collection(db)
+        try:
+            oid = ObjectId(resume_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid resume_id")
 
-    doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+        doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+
     if doc is None:
         raise HTTPException(status_code=404, detail="Resume not found")
 
-    doc["resume_id"] = str(doc.pop("_id"))
+    if db is not None:
+        doc["resume_id"] = str(doc.pop("_id"))
     return doc
 
 
@@ -174,15 +232,19 @@ async def download_resume_file(
     resume_id: str,
     user_email: str = Depends(get_current_user_email),
 ) -> FileResponse:
-    db = require_db()
-    resumes = resumes_collection(db)
+    db = get_database()
 
-    try:
-        oid = ObjectId(resume_id)
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid resume_id")
+    if db is None:
+        doc = get_local_resume_by_id_for_user(resume_id=resume_id, user_email=user_email)
+    else:
+        resumes = resumes_collection(db)
+        try:
+            oid = ObjectId(resume_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid resume_id")
 
-    doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+        doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+
     if doc is None:
         raise HTTPException(status_code=404, detail="Resume not found")
 
@@ -202,3 +264,109 @@ async def download_resume_file(
         media_type=doc.get("content_type") or "application/octet-stream",
         filename=doc.get("original_filename") or "resume",
     )
+
+
+@router.get("/{resume_id}/preview-file")
+async def download_resume_preview_file(
+    resume_id: str,
+    user_email: str = Depends(get_current_user_email),
+) -> FileResponse:
+    db = get_database()
+
+    if db is None:
+        doc = get_local_resume_by_id_for_user(resume_id=resume_id, user_email=user_email)
+    else:
+        resumes = resumes_collection(db)
+        try:
+            oid = ObjectId(resume_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid resume_id")
+
+        doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    preview_storage_ref = doc.get("preview_storage_ref")
+    if not preview_storage_ref:
+        raise HTTPException(status_code=404, detail="No generated preview available")
+
+    preview_path = (_backend_root() / str(preview_storage_ref)).resolve()
+    uploads_root = _uploads_root().resolve()
+    if uploads_root not in preview_path.parents:
+        raise HTTPException(status_code=500, detail="Invalid preview storage reference")
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Preview file missing on server")
+
+    original_filename = str(doc.get("original_filename") or "resume")
+    preview_name = f"{Path(original_filename).stem}.pdf"
+    return FileResponse(
+        path=str(preview_path),
+        media_type=doc.get("preview_content_type") or "application/pdf",
+        filename=preview_name,
+    )
+
+
+@router.post("/{resume_id}/reextract")
+async def reextract_resume_text(
+    resume_id: str,
+    user_email: str = Depends(get_current_user_email),
+) -> dict[str, Any]:
+    db = get_database()
+
+    if db is None:
+        doc = get_local_resume_by_id_for_user(resume_id=resume_id, user_email=user_email)
+    else:
+        resumes = resumes_collection(db)
+        try:
+            oid = ObjectId(resume_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid resume_id")
+        doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    storage_ref = doc.get("storage_ref")
+    if not storage_ref:
+        raise HTTPException(status_code=404, detail="Resume file not available")
+
+    file_path = (_backend_root() / str(storage_ref)).resolve()
+    uploads_root = _uploads_root().resolve()
+    if uploads_root not in file_path.parents:
+        raise HTTPException(status_code=500, detail="Invalid storage reference")
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Resume file missing on server")
+
+    extracted_text = await run_in_threadpool(extract_resume_text, file_path)
+    analyzed_at = datetime.now(timezone.utc) if extracted_text is not None else None
+
+    if db is None:
+        updated = update_local_resume_by_id_for_user(
+            resume_id=resume_id,
+            user_email=user_email,
+            updates={
+                "extracted_text": extracted_text,
+                "analyzed_at": analyzed_at.isoformat() if analyzed_at else None,
+            },
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Resume not found")
+        return updated
+
+    resumes = resumes_collection(db)
+    await resumes.update_one(
+        {"_id": oid, "user_email": user_email},
+        {
+            "$set": {
+                "extracted_text": extracted_text,
+                "analyzed_at": analyzed_at,
+            }
+        },
+    )
+    refreshed = await resumes.find_one({"_id": oid, "user_email": user_email})
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    refreshed["resume_id"] = str(refreshed.pop("_id"))
+    return refreshed

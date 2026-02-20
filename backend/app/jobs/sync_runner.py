@@ -6,7 +6,7 @@ import httpx
 
 URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/refs/heads/dev/.github/scripts/listings.json"
 
-OUTPUT_PATH = Path("Backend/app/jobs/Intern-Hunter-Listing.json")
+OUTPUT_PATH = Path("backend/app/jobs/Intern-Hunter-Listing.json")
 
 
 async def main() -> None:

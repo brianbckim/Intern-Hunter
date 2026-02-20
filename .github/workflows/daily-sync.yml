@@ -32,7 +32,7 @@ jobs:
 
       - name: Run sync script
         run: |
-          python Backend/app/jobs/sync_runner.py
+          python backend/app/jobs/sync_runner.py
 
       - name: Commit if changed
         run: |

@@ -302,7 +302,7 @@ function TopBar() {
 
       <div className="ih-topActions">
         <Link className="ih-btnGhost" to="/">
-          Dashboardhttp://localhost:5173/settings
+          Dashboard
         </Link>
       </div>
     </header>

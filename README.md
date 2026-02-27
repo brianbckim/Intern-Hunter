@@ -7,6 +7,21 @@ The backend lives in `backend/` and is a minimal FastAPI scaffold (AI provider i
 
 - Quick start (local): see `backend/README.md`
 
+## AI Resume Feedback (Ollama)
+
+This repo supports running resume feedback locally via Ollama (default model: `llama3:8b`).
+
+- Install Ollama:
+  - macOS (Homebrew): `brew install ollama`
+  - Linux: `curl -fsSL https://ollama.com/install.sh | sh`
+  - Windows: use the installer from https://ollama.com/
+- Install + run Ollama, then pull the model:
+  - `ollama serve`
+  - `ollama pull llama3:8b`
+- In `backend/.env`, set `AI_PROVIDER=ollama` (see `backend/.env.example` for the full set of variables).
+
+There is no standalone Python script you run for AI feedback — start the backend API with `uvicorn` (see `backend/README.md`).
+
 ## Resume upload + parsing (WIP)
 
 This branch adds a basic end-to-end resume flow so we can actually exercise the UI against real APIs.

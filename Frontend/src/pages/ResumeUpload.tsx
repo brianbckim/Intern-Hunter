@@ -6,6 +6,7 @@ type ResumeUploadProps = {
   analyzeDisabled: boolean
   onUpload: (file: File) => Promise<void>
   onAnalyze: () => void
+  onOpenFeedback?: () => void
 }
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'doc', 'docx']
@@ -16,6 +17,7 @@ export default function ResumeUpload({
   analyzeDisabled,
   onUpload,
   onAnalyze,
+  onOpenFeedback,
 }: ResumeUploadProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -67,6 +69,13 @@ export default function ResumeUpload({
           </button>
           <button className="ih-btnGhost" disabled={analyzeDisabled || uploading} onClick={onAnalyze}>
             Analyze Resume
+          </button>
+          <button
+            className="ih-btnGhost"
+            disabled={analyzeDisabled || uploading || !onOpenFeedback}
+            onClick={() => onOpenFeedback?.()}
+          >
+            AI Feedback
           </button>
         </div>
 

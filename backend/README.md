@@ -57,6 +57,45 @@ If you’re using PowerShell and you did NOT activate the venv, you can also run
 .\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
 ```
 
+## AI provider (Ollama: `llama3:8b`)
+
+By default the backend can run with a mock AI provider. To generate real resume feedback locally, use Ollama.
+
+1) Install Ollama:
+
+- macOS (Homebrew):
+
+```bash
+brew install ollama
+```
+
+- Linux:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+- Windows: use the installer from https://ollama.com/
+
+2) Run Ollama and pull the model:
+
+```bash
+ollama serve
+ollama pull llama3:8b
+```
+
+3) Set these in `backend/.env`:
+
+```dotenv
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3:8b
+```
+
+4) Start the API as usual (`uvicorn ...`) and use the UI to generate feedback.
+
+Note: there is no single Python file you run directly for this feature; the entrypoint is the FastAPI app via `uvicorn app.main:app`.
+
 ## Database schema
 
 Mongo collections (high-level):

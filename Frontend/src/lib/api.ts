@@ -247,3 +247,56 @@ export async function downloadResumePreviewFile(
   const filename = parseFilenameFromContentDisposition(cd) || `resume-${resumeId}-preview.pdf`
   return { blob, filename, contentType }
 }
+
+export type ResumeFeedback = {
+  user_email: string
+  resume_id: string | null
+  summary: string | null
+  strong_points: string[]
+  areas_to_improve: string[]
+  suggested_edits: string[]
+  skill_gaps: string[]
+  created_at: string
+  saved_notes: string | null
+  notes_history?: Array<{ created_at: string; text: string }>
+}
+
+export type ResumeFeedbackListItem = {
+  feedback_id: string
+  resume_id: string | null
+  summary: string | null
+  created_at: string
+}
+
+export type GenerateResumeFeedbackResponse = {
+  feedback_id: string
+  feedback: ResumeFeedback
+}
+
+export async function generateResumeFeedback(resumeId?: string | null): Promise<GenerateResumeFeedbackResponse> {
+  return apiJson<GenerateResumeFeedbackResponse>('/api/resume-feedback/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resume_id: resumeId ?? null }),
+  })
+}
+
+export async function listMyResumeFeedback(limit = 20): Promise<ResumeFeedbackListItem[]> {
+  const safeLimit = Math.max(1, Math.min(100, limit))
+  return apiJson<ResumeFeedbackListItem[]>(`/api/resume-feedback/me?limit=${safeLimit}`)
+}
+
+export async function getResumeFeedback(feedbackId: string): Promise<ResumeFeedback> {
+  return apiJson<ResumeFeedback>(`/api/resume-feedback/${encodeURIComponent(feedbackId)}`)
+}
+
+export async function updateResumeFeedbackNotes(
+  feedbackId: string,
+  savedNotes: string | null
+): Promise<ResumeFeedback> {
+  return apiJson<ResumeFeedback>(`/api/resume-feedback/${encodeURIComponent(feedbackId)}/notes`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ saved_notes: savedNotes }),
+  })
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import mammoth from 'mammoth'
+import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import {
   ApiError,
@@ -80,6 +81,7 @@ function friendlyErrorMessage(errorValue: unknown): string {
 }
 
 export default function ResumePage() {
+  const navigate = useNavigate()
   const [resumeId, setResumeId] = useState<string | null>(null)
   const [resumeDetail, setResumeDetail] = useState<ResumeDetail | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
@@ -245,6 +247,7 @@ export default function ResumePage() {
           uploadProgress={uploadProgress}
           analyzeDisabled={!resumeId}
           onUpload={handleUpload}
+          onOpenFeedback={() => navigate('/resume-feedback')}
           onAnalyze={async () => {
             if (!resumeId) return
             setSuccess(null)

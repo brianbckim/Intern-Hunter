@@ -153,6 +153,9 @@ venv.bak/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# Backend local dev store (contains user/resume/feedback data)
+backend/data/dev_store.json
+
 # Spyder project settings
 .spyderproject
 .spyproject

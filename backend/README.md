@@ -86,6 +86,11 @@ ollama pull llama3:8b
 
 3) Set these in `backend/.env`:
 
+```bash
+cd backend 
+code .env
+```
+
 ```dotenv
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434

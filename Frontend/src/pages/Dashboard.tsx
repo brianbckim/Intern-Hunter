@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ApiError, listMyResumes, uploadResume, type ResumeListItem } from '../lib/api'
+import {
+    ApiError,
+    getResumeFeedback,
+    listMyResumeFeedback,
+    listMyResumes,
+    uploadResume,
+    type ResumeFeedback,
+    type ResumeListItem,
+} from '../lib/api'
 import { getAccessToken } from '../lib/auth'
 import AppLayout from '../components/AppLayout'
 import "./Dashboard.css";
@@ -35,6 +43,10 @@ export default function Dashboard() {
     const [uploading, setUploading] = useState(false)
     const [resumeError, setResumeError] = useState<string | null>(null)
 
+    const [feedback, setFeedback] = useState<ResumeFeedback | null>(null)
+    const [loadingFeedback, setLoadingFeedback] = useState(true)
+    const [feedbackError, setFeedbackError] = useState<string | null>(null)
+
     const token = getAccessToken()
     const latest = useMemo(() => (items && items.length > 0 ? items[0] : null), [items])
 
@@ -65,6 +77,38 @@ export default function Dashboard() {
         void refreshResumes()
     }, [refreshResumes])
 
+    const refreshFeedback = useCallback(async () => {
+        setFeedbackError(null)
+        setLoadingFeedback(true)
+        try {
+            const rows = await listMyResumeFeedback(1)
+            const latestId = rows[0]?.feedback_id
+            if (!latestId) {
+                setFeedback(null)
+                return
+            }
+            const detail = await getResumeFeedback(latestId)
+            setFeedback(detail)
+        } catch (e) {
+            if (e instanceof ApiError && e.status === 401) {
+                setFeedback(null)
+            } else {
+                setFeedbackError(e instanceof Error ? e.message : 'Failed to load AI feedback.')
+            }
+        } finally {
+            setLoadingFeedback(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!token) {
+            setFeedback(null)
+            setLoadingFeedback(false)
+            return
+        }
+        void refreshFeedback()
+    }, [refreshFeedback, token])
+
     async function onPickFile(file: File) {
         setResumeError(null)
         setUploading(true)
@@ -85,11 +129,15 @@ export default function Dashboard() {
         completeness: latest ? 100 : 0,
     };
 
-    const aiFeedback = [
-        "Strong project section — keep it near the top.",
-        "Add 2–3 quantified bullets (impact + numbers).",
-        "Tighten summary to 1–2 lines for clarity.",
-    ];
+    const aiFeedback = (() => {
+        if (!feedback) return []
+        const items: string[] = []
+        if (feedback.strong_points?.[0]) items.push(feedback.strong_points[0])
+        if (feedback.areas_to_improve?.[0]) items.push(feedback.areas_to_improve[0])
+        if (feedback.suggested_edits?.[0]) items.push(feedback.suggested_edits[0])
+        if (items.length === 0 && feedback.summary) items.push(feedback.summary)
+        return items.slice(0, 3)
+    })()
 
     const savedJobs = [
         { title: "Software Engineering Intern", company: "Stripe" },
@@ -176,7 +224,7 @@ export default function Dashboard() {
                                 <button
                                     className="ih-btnGhost"
                                     disabled={!resume.uploaded}
-                                    onClick={() => navigate('/resume')}
+                                    onClick={() => navigate('/resume-feedback')}
                                 >
                                     Request AI Review
                                 </button>
@@ -184,14 +232,27 @@ export default function Dashboard() {
                         </Card>
 
                         <Card title="AI Feedback Summary" subtitle="High-level notes from AI review">
-                            <ul className="ih-list">
-                                {aiFeedback.map((item) => (
-                                    <li key={item}>{item}</li>
-                                ))}
-                            </ul>
+                            {loadingFeedback ? <div className="ih-muted">Loading…</div> : null}
+                            {feedbackError ? <div className="ih-muted">{feedbackError}</div> : null}
+
+                            {!loadingFeedback && aiFeedback.length === 0 ? (
+                                <div className="ih-muted">No AI feedback yet. Click “Request AI Review” to generate one.</div>
+                            ) : null}
+
+                            {aiFeedback.length ? (
+                                <ul className="ih-list">
+                                    {aiFeedback.map((item) => (
+                                        <li key={item}>{item}</li>
+                                    ))}
+                                </ul>
+                            ) : null}
                             <div className="ih-actions">
-                                <button className="ih-btnPrimary">View Full Feedback</button>
-                                <button className="ih-btnGhost">Download Suggestions</button>
+                                <button className="ih-btnPrimary" onClick={() => navigate('/resume-feedback')}>
+                                    View Full Feedback
+                                </button>
+                                <button className="ih-btnGhost" disabled>
+                                    Download Suggestions
+                                </button>
                             </div>
                         </Card>
 

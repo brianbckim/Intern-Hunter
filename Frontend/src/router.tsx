@@ -10,6 +10,7 @@ import Settings from './pages/Settings'
 import ErrorPage from './pages/ErrorPage'
 import Resume from './pages/Resume'
 import ParseTest from './pages/ParseTest'
+import ResumeFeedback from './pages/ResumeFeedback'
 import ProtectedRoute from './components/ProtectedRoute'
 
 const router = createBrowserRouter([
@@ -48,6 +49,15 @@ const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <ParseTest />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/resume-feedback',
+    element: (
+      <ProtectedRoute>
+        <ResumeFeedback />
       </ProtectedRoute>
     ),
     errorElement: <ErrorPage />,

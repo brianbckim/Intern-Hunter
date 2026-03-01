@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useNavigate } from 'react-router-dom'
 import {
     ApiError,
+    generateRecommendations,
     getResumeFeedback,
     listMyResumeFeedback,
     listMyResumes,
     uploadResume,
+    type RecommendationsResponse,
     type ResumeFeedback,
     type ResumeListItem,
 } from '../lib/api'
@@ -46,6 +48,10 @@ export default function Dashboard() {
     const [feedback, setFeedback] = useState<ResumeFeedback | null>(null)
     const [loadingFeedback, setLoadingFeedback] = useState(true)
     const [feedbackError, setFeedbackError] = useState<string | null>(null)
+
+    const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null)
+    const [loadingRecommendations, setLoadingRecommendations] = useState(false)
+    const [recommendationsError, setRecommendationsError] = useState<string | null>(null)
 
     const token = getAccessToken()
     const latest = useMemo(() => (items && items.length > 0 ? items[0] : null), [items])
@@ -108,6 +114,42 @@ export default function Dashboard() {
         }
         void refreshFeedback()
     }, [refreshFeedback, token])
+
+    const refreshRecommendations = useCallback(async () => {
+        if (!token) {
+            setRecommendations(null)
+            return
+        }
+
+        if (!latest?.resume_id) {
+            setRecommendations(null)
+            return
+        }
+
+        setRecommendationsError(null)
+        setLoadingRecommendations(true)
+        try {
+            const value = await generateRecommendations({
+                limit: 3,
+                candidate_pool: 40,
+                use_ai: true,
+                resume_id: latest.resume_id,
+            })
+            setRecommendations(value)
+        } catch (e) {
+            if (e instanceof ApiError && e.status === 401) {
+                setRecommendations(null)
+            } else {
+                setRecommendationsError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+            }
+        } finally {
+            setLoadingRecommendations(false)
+        }
+    }, [latest?.resume_id, token])
+
+    useEffect(() => {
+        void refreshRecommendations()
+    }, [refreshRecommendations])
 
     async function onPickFile(file: File) {
         setResumeError(null)
@@ -254,6 +296,50 @@ export default function Dashboard() {
                                     Download Suggestions
                                 </button>
                             </div>
+                        </Card>
+
+                        <Card title="AI Recommendations" subtitle="Personalized career & internship matches based on your resume">
+                            {!token ? (
+                                <div className="ih-muted">Login to see recommendations.</div>
+                            ) : !latest?.resume_id ? (
+                                <div className="ih-muted">Upload a resume to get AI-based recommendations.</div>
+                            ) : null}
+
+                            {loadingRecommendations ? <div className="ih-muted">Loading…</div> : null}
+                            {recommendationsError ? <div className="ih-muted">{recommendationsError}</div> : null}
+
+                            {recommendations?.career_summary ? (
+                                <div className="ih-muted" style={{ marginBottom: 12 }}>
+                                    {recommendations.career_summary}
+                                </div>
+                            ) : null}
+
+                            {recommendations?.jobs?.length ? (
+                                <ul className="ih-list">
+                                    {recommendations.jobs.slice(0, 3).map((job) => (
+                                        <li key={job.uid}>
+                                            <strong>{job.title || 'Untitled role'}</strong>
+                                            {job.company ? ` — ${job.company}` : ''}
+                                            {job.location ? ` (${job.location})` : ''}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : null}
+
+                            <div className="ih-actions">
+                                <button className="ih-btnPrimary" onClick={() => navigate('/jobs?tab=ai')}>
+                                    View Recommendations
+                                </button>
+                                <button className="ih-btnGhost" disabled={!token || !latest?.resume_id || loadingRecommendations} onClick={() => void refreshRecommendations()}>
+                                    Refresh
+                                </button>
+                            </div>
+
+                            {recommendations ? (
+                                <div className="ih-muted" style={{ marginTop: 10 }}>
+                                    {recommendations.ai_used ? 'AI ordering enabled.' : 'AI ordering unavailable; showing heuristic matches.'}
+                                </div>
+                            ) : null}
                         </Card>
 
                         <div className="ih-twoCol">

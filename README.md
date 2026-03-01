@@ -3,7 +3,9 @@ An AI-powered career coaching platform that generates personalized internship, c
 
 ## Backend (initial scaffold)
 
-The backend lives in `backend/` and is a minimal FastAPI scaffold (AI provider is intentionally pluggable and defaults to a mock provider until the team picks DeepSeek/OpenAI/Gemini).
+The backend lives in `backend/` and is a FastAPI app.
+
+The AI layer is intentionally pluggable (set `AI_PROVIDER=mock` to disable AI calls, or `AI_PROVIDER=ollama` to use a local Ollama server).
 
 - Quick start (local): see `backend/README.md`
 
@@ -21,6 +23,14 @@ This repo supports running resume feedback locally via Ollama (default model: `l
 - In `backend/.env`, set `AI_PROVIDER=ollama` (see `backend/.env.example` for the full set of variables).
 
 There is no standalone Python script you run for AI feedback — start the backend API with `uvicorn` (see `backend/README.md`).
+
+## AI Internship Recommendations (Jobs)
+
+This repo also supports generating AI-assisted internship recommendations from the live listings JSON.
+
+- Backend API: `POST /api/recommendations/generate` (requires auth)
+- Listings source (auto-updated): `backend/app/jobs/Intern-Hunter-Listing.json`
+- If AI is disabled/unavailable, the API falls back to heuristic ordering and returns `ai_used=false`.
 
 ## Resume upload + parsing (WIP)
 

@@ -5,6 +5,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.profile import router as profile_router
 from app.api.routes.resume_feedback import router as resume_feedback_router
 from app.api.routes.resumes import router as resumes_router
+from app.api.routes.recommendations import router as recommendations_router
 from app.api.routes import jobs
 
 api_router = APIRouter()
@@ -13,6 +14,7 @@ api_router.include_router(auth_router, tags=["auth"])
 api_router.include_router(profile_router, tags=["profile"])
 api_router.include_router(resumes_router, tags=["resumes"])
 api_router.include_router(resume_feedback_router, tags=["resume-feedback"])
+api_router.include_router(recommendations_router, tags=["recommendations"])
 
 api_router.include_router(
     jobs.router,

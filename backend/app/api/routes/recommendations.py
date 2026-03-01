@@ -15,6 +15,7 @@ from app.db.local_store import list_resumes_by_user as list_local_resumes_by_use
 from app.db.local_store import get_resume_by_id_for_user as get_local_resume_by_id_for_user
 from app.db.mongo import get_database
 from app.jobs.listing_loader import list_visible_jobs
+from app.core.config import settings
 from app.schemas.profile import UserProfile
 from app.services.recommendations import profile_summary, score_jobs_for_user
 
@@ -124,7 +125,8 @@ async def generate_recommendations(
     # Optional AI-based reranking and summary.
     ranked_uids: list[str] = []
     reasons: dict[str, str] = {}
-    if payload.use_ai:
+    ai_provider_name = (settings.AI_PROVIDER or "mock").strip().lower()
+    if payload.use_ai and ai_provider_name != "mock":
         try:
             provider = get_ai_provider()
             ai = await provider.career_recommendations(

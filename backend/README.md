@@ -59,7 +59,7 @@ If you’re using PowerShell and you did NOT activate the venv, you can also run
 
 ## AI provider (Ollama: `llama3:8b`)
 
-By default the backend can run with a mock AI provider. To generate real resume feedback locally, use Ollama.
+By default the backend can run with a mock AI provider. To generate real resume feedback and AI-assisted job recommendations locally, use Ollama.
 
 1) Install Ollama:
 
@@ -90,6 +90,7 @@ ollama pull llama3:8b
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=llama3:8b
+OLLAMA_REQUEST_TIMEOUT_SECONDS=300
 ```
 
 4) Start the API as usual (`uvicorn ...`) and use the UI to generate feedback.
@@ -121,6 +122,23 @@ If MongoDB is not running, auth/profile endpoints now fall back to a local JSON 
 - `GET /api/health/db`
 - `POST /api/auth/register` (email, password, optional full_name)
 - `POST /api/auth/login` (email, password)
+- `POST /api/recommendations/generate` (authenticated; internship recommendations)
+
+Recommendations request body (example):
+
+```json
+{
+	"limit": 20,
+	"candidate_pool": 80,
+	"use_ai": true,
+	"resume_id": null
+}
+```
+
+Notes:
+
+- If `use_ai=true` and `AI_PROVIDER!=mock`, the backend uses the configured AI provider to re-rank and summarize.
+- If AI is disabled/unavailable, it falls back to heuristics and returns `ai_used=false`.
 
 Quick test:
 

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     MONGODB_URI: str | None = None
     MONGODB_DB: str = "internhunter"
 
-    AI_PROVIDER: str = "mock"
+    AI_PROVIDER: str = "ollama"
 
     # Ollama (local)
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"

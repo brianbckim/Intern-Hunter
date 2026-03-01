@@ -8,6 +8,9 @@ export const API_ENDPOINTS = {
   profile: {
     me: '/api/profile/me',
   },
+  recommendations: {
+    generate: '/api/recommendations/generate',
+  },
 }
 
 export class ApiError extends Error {
@@ -104,6 +107,46 @@ export async function getMyProfile(): Promise<UserProfile> {
 export async function updateMyProfile(payload: UserProfileUpdate): Promise<UserProfile> {
   return apiJson<UserProfile>(API_ENDPOINTS.profile.me, {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export type RecommendationJob = {
+  uid: string
+  source: string
+  external_id: string
+  title: string | null
+  company: string | null
+  location: string | null
+  url: string | null
+  category: string | null
+  sponsorship: string | null
+  date_posted: number | null
+  score: number | null
+  reason: string | null
+}
+
+export type RecommendationsResponse = {
+  ai_used: boolean
+  career_summary: string | null
+  recommended_roles: string[]
+  recommended_skills: string[]
+  jobs: RecommendationJob[]
+}
+
+export type GenerateRecommendationsRequest = {
+  limit?: number
+  candidate_pool?: number
+  use_ai?: boolean
+  resume_id?: string | null
+}
+
+export async function generateRecommendations(
+  payload: GenerateRecommendationsRequest
+): Promise<RecommendationsResponse> {
+  return apiJson<RecommendationsResponse>(API_ENDPOINTS.recommendations.generate, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })

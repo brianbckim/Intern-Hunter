@@ -11,6 +11,7 @@ import ErrorPage from './pages/ErrorPage'
 import Resume from './pages/Resume'
 import ParseTest from './pages/ParseTest'
 import ResumeFeedback from './pages/ResumeFeedback'
+import Recruiters from './pages/Recruiters'
 import ProtectedRoute from './components/ProtectedRoute'
 
 const router = createBrowserRouter([
@@ -76,6 +77,15 @@ const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <Applications />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/recruiters',
+    element: (
+      <ProtectedRoute>
+        <Recruiters />
       </ProtectedRoute>
     ),
     errorElement: <ErrorPage />,

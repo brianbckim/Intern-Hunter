@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getMyProfile, type UserProfile } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 
-type NavKey = 'dashboard' | 'resume' | 'jobs' | 'applications' | 'settings'
+type NavKey = 'dashboard' | 'resume' | 'jobs' | 'applications' | 'recruiters' | 'settings'
 
 type AppLayoutProps = {
   pageLabel: string
@@ -16,6 +16,7 @@ const navItems: Array<{ key: NavKey; label: string; href: string }> = [
   { key: 'resume', label: 'Resume', href: '/resume' },
   { key: 'jobs', label: 'Jobs', href: '/jobs' },
   { key: 'applications', label: 'Applications', href: '/applications' },
+  { key: 'recruiters', label: 'Recruiters', href: '/recruiters' },
   { key: 'settings', label: 'Settings', href: '/settings' },
 ]
 

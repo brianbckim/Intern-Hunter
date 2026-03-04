@@ -6,6 +6,20 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* 🎨 Theme Variables (Light Default) */
+  --bg: #f6f7fb;
+  --text: #111827;
+  --card-bg: #ffffff;
+  --border: #e5e7eb;
+}
+
+/* 🌙 Dark Mode Overrides */
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --text: #e5e7eb;
+  --card-bg: #1e293b;
+  --border: #334155;
 }
 
 * {
@@ -22,8 +36,8 @@ body,
 body {
   margin: 0;
   min-width: 320px;
-  background: #f6f7fb;
-  color: #111827;
+  color: var(--text);
+  transition: var(--bg) 0.25s ease, color 0.25s ease;
 }
 
 a {

@@ -8,6 +8,9 @@ export const API_ENDPOINTS = {
   profile: {
     me: '/api/profile/me',
   },
+  recruiters: {
+    search: '/api/recruiters/search',
+  },
   recommendations: {
     generate: '/api/recommendations/generate',
   },
@@ -150,6 +153,47 @@ export async function generateRecommendations(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+export type RecruiterItem = {
+  name: string | null
+  locality: string | null
+  country: string | null
+  region: string | null
+  linkedin_url: string | null
+  website: string | null
+}
+
+export type RecruiterSearchResponse = {
+  total: number
+  page: number
+  limit: number
+  pages: number
+  items: RecruiterItem[]
+}
+
+export type RecruiterSearchRequest = {
+  name?: string
+  locality?: string
+  country?: string
+  region?: string
+  limit?: number
+  page?: number
+}
+
+export async function searchRecruiters(
+  payload: RecruiterSearchRequest
+): Promise<RecruiterSearchResponse> {
+  const params = new URLSearchParams()
+  if (payload.name) params.set('name', payload.name)
+  if (payload.locality) params.set('locality', payload.locality)
+  if (payload.country) params.set('country', payload.country)
+  if (payload.region) params.set('region', payload.region)
+  if (payload.limit) params.set('limit', String(payload.limit))
+  if (payload.page) params.set('page', String(payload.page))
+  const query = params.toString()
+  const url = query ? `${API_ENDPOINTS.recruiters.search}?${query}` : API_ENDPOINTS.recruiters.search
+  return apiJson<RecruiterSearchResponse>(url)
 }
 
 export type ResumeListItem = {

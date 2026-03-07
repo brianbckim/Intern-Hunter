@@ -11,7 +11,7 @@ function formatDate(isoOrDate: string | null | undefined): string {
   if (!isoOrDate) return '—'
   const d = new Date(isoOrDate)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function ParseTest() {

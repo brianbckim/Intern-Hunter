@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from bson import ObjectId
@@ -21,6 +21,7 @@ from app.db.local_store import (
 )
 from app.db.mongo import get_database
 from app.schemas.feedback import ResumeFeedback
+from app.utils.time import now_eastern
 
 
 router = APIRouter(prefix="/resume-feedback")
@@ -56,7 +57,7 @@ def _parse_datetime(value: str | datetime | None) -> datetime:
         return value
     if isinstance(value, str):
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return datetime.now(timezone.utc)
+    return now_eastern()
 
 
 async def _get_latest_resume_id_for_user(user_email: str) -> str | None:
@@ -109,7 +110,7 @@ async def generate_feedback(
     provider = get_ai_provider()
     ai_feedback = await provider.resume_feedback(extracted_text)
 
-    created_at = datetime.now(timezone.utc)
+    created_at = now_eastern()
     feedback = ResumeFeedback(
         user_email=user_email,
         resume_id=str(resume_id),
@@ -226,7 +227,7 @@ async def update_feedback_notes(
             {"_id": oid, "user_email": user_email},
             {
                 "$set": {"saved_notes": note_text},
-                "$push": {"notes_history": {"created_at": datetime.now(timezone.utc), "text": note_text}},
+                "$push": {"notes_history": {"created_at": now_eastern(), "text": note_text}},
             },
         )
     else:

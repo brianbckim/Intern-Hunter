@@ -2,10 +2,23 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from threading import Lock
 from typing import Any
 from uuid import uuid4
+
+from app.utils.time import now_eastern
+
+
+def _safe_parse_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return datetime.min
+    return datetime.min
 
 
 _lock = Lock()
@@ -14,13 +27,14 @@ _store_path = Path(__file__).resolve().parents[2] / "data" / "dev_store.json"
 
 def _read_store() -> dict[str, Any]:
     if not _store_path.exists():
-        return {"users": [], "profiles": {}, "resumes": [], "resume_feedback": []}
+        return {"users": [], "profiles": {}, "resumes": [], "resume_feedback": [], "recommendations_snapshots": []}
 
     try:
         raw = json.loads(_store_path.read_text(encoding="utf-8"))
         users = raw.get("users", [])
         profiles = raw.get("profiles", {})
         resume_feedback = raw.get("resume_feedback", [])
+        recommendations_snapshots = raw.get("recommendations_snapshots", [])
         if not isinstance(users, list):
             users = []
         if not isinstance(profiles, dict):
@@ -30,9 +44,71 @@ def _read_store() -> dict[str, Any]:
             resumes = []
         if not isinstance(resume_feedback, list):
             resume_feedback = []
-        return {"users": users, "profiles": profiles, "resumes": resumes, "resume_feedback": resume_feedback}
+        if not isinstance(recommendations_snapshots, list):
+            recommendations_snapshots = []
+        return {
+            "users": users,
+            "profiles": profiles,
+            "resumes": resumes,
+            "resume_feedback": resume_feedback,
+            "recommendations_snapshots": recommendations_snapshots,
+        }
     except Exception:
-        return {"users": [], "profiles": {}, "resumes": [], "resume_feedback": []}
+        return {"users": [], "profiles": {}, "resumes": [], "resume_feedback": [], "recommendations_snapshots": []}
+
+
+def create_recommendations_snapshot(doc: dict[str, Any]) -> str:
+    with _lock:
+        store = _read_store()
+        snapshot_id = uuid4().hex
+        item = {"snapshot_id": snapshot_id, **doc}
+        store.setdefault("recommendations_snapshots", []).append(item)
+        _write_store(store)
+        return snapshot_id
+
+
+def list_recommendations_snapshots_by_user(user_email: str, limit: int = 20) -> list[dict[str, Any]]:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        rows = [
+            dict(item)
+            for item in store.get("recommendations_snapshots", [])
+            if str(item.get("user_email", "")).lower() == normalized
+        ]
+
+    rows.sort(key=lambda item: _safe_parse_datetime(item.get("created_at")), reverse=True)
+    return rows[:limit]
+
+
+def get_latest_recommendations_snapshot_for_user(user_email: str, resume_id: str) -> dict[str, Any] | None:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        rows = [
+            dict(item)
+            for item in store.get("recommendations_snapshots", [])
+            if str(item.get("user_email", "")).lower() == normalized and str(item.get("resume_id")) == str(resume_id)
+        ]
+    rows.sort(key=lambda item: _safe_parse_datetime(item.get("created_at")), reverse=True)
+    return rows[0] if rows else None
+
+
+def update_recommendations_snapshot_by_id_for_user(
+    snapshot_id: str, user_email: str, updates: dict[str, Any]
+) -> dict[str, Any] | None:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        items = store.get("recommendations_snapshots", [])
+        for index, item in enumerate(items):
+            if str(item.get("snapshot_id", "")) == snapshot_id and str(item.get("user_email", "")).lower() == normalized:
+                updated = {**item, **updates}
+                items[index] = updated
+                store["recommendations_snapshots"] = items
+                _write_store(store)
+                return dict(updated)
+    return None
 
 
 def _write_store(data: dict[str, Any]) -> None:
@@ -93,7 +169,7 @@ def list_resumes_by_user(user_email: str, limit: int = 20) -> list[dict[str, Any
             if str(item.get("user_email", "")).lower() == normalized
         ]
 
-    rows.sort(key=lambda item: str(item.get("uploaded_at", "")), reverse=True)
+    rows.sort(key=lambda item: _safe_parse_datetime(item.get("uploaded_at")), reverse=True)
     return rows[:limit]
 
 
@@ -126,6 +202,57 @@ def update_resume_by_id_for_user(resume_id: str, user_email: str, updates: dict[
     return None
 
 
+def delete_resume_by_id_for_user(resume_id: str, user_email: str) -> dict[str, Any] | None:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        items = store.get("resumes", [])
+        for index, item in enumerate(items):
+            if (
+                str(item.get("resume_id", "")) == resume_id
+                and str(item.get("user_email", "")).lower() == normalized
+            ):
+                removed = dict(items.pop(index))
+                store["resumes"] = items
+                _write_store(store)
+                return removed
+    return None
+
+
+def delete_resume_feedback_by_resume_id_for_user(resume_id: str, user_email: str) -> int:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        items = list(store.get("resume_feedback", []))
+        kept: list[dict[str, Any]] = []
+        removed = 0
+        for item in items:
+            if str(item.get("user_email", "")).lower() == normalized and str(item.get("resume_id")) == str(resume_id):
+                removed += 1
+            else:
+                kept.append(item)
+        store["resume_feedback"] = kept
+        _write_store(store)
+        return removed
+
+
+def delete_recommendations_snapshots_by_resume_id_for_user(resume_id: str, user_email: str) -> int:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        items = list(store.get("recommendations_snapshots", []))
+        kept: list[dict[str, Any]] = []
+        removed = 0
+        for item in items:
+            if str(item.get("user_email", "")).lower() == normalized and str(item.get("resume_id")) == str(resume_id):
+                removed += 1
+            else:
+                kept.append(item)
+        store["recommendations_snapshots"] = kept
+        _write_store(store)
+        return removed
+
+
 def create_resume_feedback(doc: dict[str, Any]) -> str:
     with _lock:
         store = _read_store()
@@ -146,7 +273,7 @@ def list_resume_feedback_by_user(user_email: str, limit: int = 20) -> list[dict[
             if str(item.get("user_email", "")).lower() == normalized
         ]
 
-    rows.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+    rows.sort(key=lambda item: _safe_parse_datetime(item.get("created_at")), reverse=True)
     return rows[:limit]
 
 
@@ -187,7 +314,7 @@ def update_resume_feedback_notes_by_id_for_user(
                 if not isinstance(history, list):
                     history = []
 
-                history.append({"created_at": datetime.now(timezone.utc).isoformat(), "text": note_text})
+                history.append({"created_at": now_eastern().isoformat(), "text": note_text})
                 updated = {**item, "saved_notes": note_text, "notes_history": history}
                 items[index] = updated
                 store["resume_feedback"] = items

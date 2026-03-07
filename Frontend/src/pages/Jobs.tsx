@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import {
   ApiError,
-  generateRecommendations,
+  ensureRecommendations,
+  getLatestRecommendations,
   listMyResumes,
   type RecommendationJob,
   type RecommendationsResponse,
@@ -24,7 +25,7 @@ const PAGE_SIZE = 20
 
 function formatDate(timestamp?: number): string {
   if (!timestamp) return ''
-  return new Date(timestamp * 1000).toLocaleDateString()
+  return new Date(timestamp * 1000).toLocaleDateString('en-US', { timeZone: 'America/New_York' })
 }
 
 function normalizeCategory(category?: string): string {
@@ -45,6 +46,10 @@ export default function Jobs() {
   const [recLoading, setRecLoading] = useState(false)
   const [recError, setRecError] = useState<string | null>(null)
   const [recData, setRecData] = useState<RecommendationsResponse | null>(null)
+  const [recResumeId, setRecResumeId] = useState<string | null>(null)
+  const [recSnapshotId, setRecSnapshotId] = useState<string | null>(null)
+  const [recUpdatedAt, setRecUpdatedAt] = useState<string | null>(null)
+  const [recRefreshToken, setRecRefreshToken] = useState(0)
 
   const [search, setSearch] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -140,30 +145,159 @@ export default function Jobs() {
     setActiveTab(next)
   }
 
-  async function generateAiRecommendations() {
-    setRecError(null)
-    setRecLoading(true)
-    try {
-      const resumes = await listMyResumes()
-      const latestResumeId = resumes[0]?.resume_id ?? null
+  function easternDayKey(date: Date): string {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date)
 
-      const value = await generateRecommendations({
-        limit: 20,
-        candidate_pool: 80,
-        use_ai: true,
-        resume_id: latestResumeId,
-      })
-      setRecData(value)
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        setRecError('Please login again to generate recommendations.')
-      } else {
-        setRecError(e instanceof Error ? e.message : 'Failed to generate recommendations.')
-      }
-    } finally {
-      setRecLoading(false)
-    }
+    const year = parts.find((p) => p.type === 'year')?.value ?? '0000'
+    const month = parts.find((p) => p.type === 'month')?.value ?? '01'
+    const day = parts.find((p) => p.type === 'day')?.value ?? '01'
+    return `${year}-${month}-${day}`
   }
+
+  useEffect(() => {
+    if (activeTab !== 'ai') return
+    let cancelled = false
+    let lastKey = easternDayKey(new Date())
+    const timer = window.setInterval(() => {
+      if (cancelled) return
+      const currentKey = easternDayKey(new Date())
+      if (currentKey !== lastKey) {
+        lastKey = currentKey
+        setRecRefreshToken((prev) => prev + 1)
+      }
+    }, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'ai' || !recResumeId) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const latest = await getLatestRecommendations(recResumeId)
+          if (cancelled) return
+          if (latest.status === 'ready' && latest.data) {
+            const snapshotChanged = (latest.snapshot_id && latest.snapshot_id !== recSnapshotId) || false
+            const updatedChanged = (latest.updated_at && latest.updated_at !== recUpdatedAt) || false
+            if (snapshotChanged || updatedChanged) {
+              setRecData(latest.data)
+              setRecSnapshotId(latest.snapshot_id)
+              setRecUpdatedAt(latest.updated_at)
+            }
+          }
+        } catch {
+          // best-effort background sync
+        }
+      })()
+    }, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [activeTab, recResumeId, recSnapshotId, recUpdatedAt])
+
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | null = null
+
+    async function pollLatest(resumeId: string) {
+      if (cancelled) return
+      try {
+        const latest = await getLatestRecommendations(resumeId)
+        if (cancelled) return
+
+        if (latest.status === 'ready' && latest.data) {
+          setRecData(latest.data)
+          setRecResumeId(resumeId)
+          setRecSnapshotId(latest.snapshot_id)
+          setRecUpdatedAt(latest.updated_at)
+          setRecLoading(false)
+          return
+        }
+        if (latest.status === 'error') {
+          setRecError(latest.error || 'Failed to generate recommendations.')
+          setRecLoading(false)
+          return
+        }
+
+        setRecLoading(true)
+        timer = window.setTimeout(() => void pollLatest(resumeId), 1500)
+      } catch (e) {
+        if (cancelled) return
+        if (e instanceof ApiError && e.status === 401) {
+          setRecError('Please login again to load recommendations.')
+        } else {
+          setRecError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+        }
+        setRecLoading(false)
+      }
+    }
+
+    async function ensureAndPoll() {
+      if (activeTab !== 'ai') return
+      setRecError(null)
+      setRecLoading(true)
+
+      try {
+        const resumes = await listMyResumes()
+        const latestResumeId = resumes[0]?.resume_id ?? null
+        if (!latestResumeId) {
+          setRecLoading(false)
+          setRecError('Upload a resume to get AI recommendations.')
+          return
+        }
+
+        if (recResumeId && recResumeId !== latestResumeId) {
+          setRecData(null)
+        }
+        setRecResumeId(latestResumeId)
+
+        const ensured = await ensureRecommendations({
+          limit: 20,
+          candidate_pool: 80,
+          use_ai: true,
+          resume_id: latestResumeId,
+        })
+        if (cancelled) return
+
+        if (ensured.status === 'ready' && ensured.data) {
+          setRecData(ensured.data)
+          setRecSnapshotId(ensured.snapshot_id)
+          setRecUpdatedAt(ensured.updated_at)
+          setRecLoading(false)
+          return
+        }
+
+        // pending/missing: keep polling until ready
+        void pollLatest(latestResumeId)
+      } catch (e) {
+        if (cancelled) return
+        if (e instanceof ApiError && e.status === 401) {
+          setRecError('Please login again to load recommendations.')
+        } else {
+          setRecError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+        }
+        setRecLoading(false)
+      }
+    }
+
+    void ensureAndPoll()
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [activeTab, recRefreshToken])
 
   function renderRecommendationJob(job: RecommendationJob) {
     return (
@@ -219,12 +353,7 @@ export default function Jobs() {
                 <div className="ih-row" style={{ marginBottom: 16 }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 22 }}>AI-based recommendations</div>
-                    <div className="ih-muted">Click the button to generate the top 20 matches based on your current resume.</div>
-                  </div>
-                  <div className="ih-actions" style={{ marginTop: 0 }}>
-                    <button className="ih-btnPrimary" type="button" disabled={recLoading} onClick={() => void generateAiRecommendations()}>
-                      {recLoading ? 'Generating…' : 'Generate'}
-                    </button>
+                    <div className="ih-muted">Recommendations generate automatically based on your latest resume.</div>
                   </div>
                 </div>
 
@@ -234,7 +363,7 @@ export default function Jobs() {
                   </div>
                 ) : null}
 
-                {recLoading ? <div className="ih-muted">Loading…</div> : null}
+                {recLoading ? <div className="ih-muted">Loading… (AI recommendations are generating)</div> : null}
 
                 {recData?.jobs?.length ? (
                   <>

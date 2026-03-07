@@ -9,9 +9,52 @@ The AI layer is intentionally pluggable (set `AI_PROVIDER=mock` to disable AI ca
 
 - Quick start (local): see `backend/README.md`
 
+## Local development (4 terminals)
+
+This is the typical workflow to run the full stack locally.
+
+### Terminal 0 — Docker (MongoDB)
+
+```bash
+colima start
+cd backend
+docker compose up -d
+```
+
+### Terminal 1 — Ollama
+
+```bash
+export OLLAMA_KEEP_ALIVE=-1
+ollama serve
+```
+
+### Terminal 2 — Backend (FastAPI)
+
+```bash
+cd backend
+source ../.venv/bin/activate
+
+# optional warm-up (keeps the model loaded)
+curl --silent http://localhost:11434/api/generate -d '{
+  "model": "llama3.2:3b",
+  "keep_alive": -1
+}' > /dev/null
+
+uvicorn app.main:app --reload --port 8000
+```
+
+### Terminal 3 — Frontend (Vite)
+
+```bash
+cd Frontend
+npm run dev -- --port 5173
+```
+
+Open the app at http://localhost:5173
+
 ## AI Resume Feedback (Ollama)
 
-This repo supports running resume feedback locally via Ollama (default model: `llama3:8b`).
+This repo supports running resume feedback locally via Ollama (default model: `llama3.2:3b`).
 
 - Install Ollama:
   - macOS (Homebrew): `brew install ollama`
@@ -19,7 +62,7 @@ This repo supports running resume feedback locally via Ollama (default model: `l
   - Windows: use the installer from https://ollama.com/
 - Install + run Ollama, then pull the model:
   - `ollama serve`
-  - `ollama pull llama3:8b`
+  - `ollama pull llama3.2:3b`
 - In `backend/.env`, set `AI_PROVIDER=ollama` (see `backend/.env.example` for the full set of variables).
 
 There is no standalone Python script you run for AI feedback — start the backend API with `uvicorn` (see `backend/README.md`).

@@ -94,7 +94,25 @@ class OllamaResumeFeedbackProvider:
         payload = {
             "model": settings.OLLAMA_MODEL,
             "stream": False,
-            "format": "json",
+            # JSON Schema forces the model to return the required structure.
+            "format": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "summary": {"type": "string"},
+                    "strong_points": {"type": "array", "items": {"type": "string"}},
+                    "areas_to_improve": {"type": "array", "items": {"type": "string"}},
+                    "suggested_edits": {"type": "array", "items": {"type": "string"}},
+                    "skill_gaps": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
+                },
+                "required": [
+                    "summary",
+                    "strong_points",
+                    "areas_to_improve",
+                    "suggested_edits",
+                    "skill_gaps",
+                ],
+            },
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

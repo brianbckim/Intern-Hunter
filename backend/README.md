@@ -57,7 +57,7 @@ If you’re using PowerShell and you did NOT activate the venv, you can also run
 .\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
 ```
 
-## AI provider (Ollama: `llama3:8b`)
+## AI provider (Ollama: `llama3.2:3b`)
 
 By default the backend can run with a mock AI provider. To generate real resume feedback and AI-assisted job recommendations locally, use Ollama.
 
@@ -81,7 +81,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ```bash
 ollama serve
-ollama pull llama3:8b
+ollama pull llama3.2:3b
 ```
 
 3) Set these in `backend/.env`:
@@ -89,7 +89,7 @@ ollama pull llama3:8b
 ```dotenv
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=llama3:8b
+OLLAMA_MODEL=llama3.2:3b
 OLLAMA_REQUEST_TIMEOUT_SECONDS=300
 ```
 

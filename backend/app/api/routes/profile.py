@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user_email
@@ -10,6 +8,7 @@ from app.db.local_store import get_profile as get_local_profile
 from app.db.local_store import upsert_profile as upsert_local_profile
 from app.db.mongo import get_database
 from app.schemas.profile import UserProfile, UserProfileUpdate
+from app.utils.time import now_eastern
 
 
 router = APIRouter(prefix="/profile")
@@ -53,7 +52,7 @@ async def upsert_my_profile(
         career_interests=payload.career_interests,
         skills=payload.skills,
         graduation_year=payload.graduation_year,
-        updated_at=datetime.now(timezone.utc),
+           updated_at=now_eastern(),
     )
 
     if db is None:

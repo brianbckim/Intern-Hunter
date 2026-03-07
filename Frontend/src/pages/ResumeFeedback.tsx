@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import AppLayout from '../components/AppLayout'
 import {
   ApiError,
   downloadResumeFile,
+  deleteResume,
   generateResumeFeedback,
   getResumeFeedback,
   getResume,
   listMyResumeFeedback,
+  listMyResumes,
   updateResumeFeedbackNotes,
   type ResumeFeedback,
   type ResumeDetail,
@@ -22,15 +24,25 @@ function normalizeError(errorValue: unknown): string {
 }
 
 export default function ResumeFeedbackPage() {
+  const navigate = useNavigate()
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<ResumeFeedback | null>(null)
+  const [latestResumeId, setLatestResumeId] = useState<string | null>(null)
+  const [waitingForResumeId, setWaitingForResumeId] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [deletingResumeId, setDeletingResumeId] = useState<string | null>(null)
   const [savingNotes, setSavingNotes] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  function parseTimeMs(value: string | null | undefined): number {
+    if (!value) return 0
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? 0 : ms
+  }
 
   const [historyGroups, setHistoryGroups] = useState<
     Array<{
@@ -44,19 +56,44 @@ export default function ResumeFeedbackPage() {
     setLoading(true)
     setError(null)
     setSuccess(null)
+    setWaitingForResumeId(null)
 
     try {
-      const items = await listMyResumeFeedback(1)
-      const latestId = items[0]?.feedback_id
-      if (!latestId) {
+      const resumes = await listMyResumes()
+      const currentResumeId = resumes[0]?.resume_id ?? null
+      setLatestResumeId(currentResumeId)
+
+      if (!currentResumeId) {
+        navigate('/resume', { replace: true })
         setFeedbackId(null)
         setFeedback(null)
         setNotes('')
         return
       }
 
-      const detail = await getResumeFeedback(latestId)
-      setFeedbackId(latestId)
+      const items = await listMyResumeFeedback(20)
+      if (!items.length) {
+        // No feedback at all yet.
+        setFeedbackId(null)
+        setFeedback(null)
+        setNotes('')
+        return
+      }
+
+      // Prefer feedback for the current (latest) resume.
+      const matching = items.find((row) => row.resume_id === currentResumeId) ?? null
+      if (!matching?.feedback_id) {
+        // We have older feedback, but not for the latest resume yet.
+        // Don't show stale data; show a loading state until generation completes.
+        setFeedbackId(null)
+        setFeedback(null)
+        setNotes('')
+        setWaitingForResumeId(currentResumeId)
+        return
+      }
+
+      const detail = await getResumeFeedback(matching.feedback_id)
+      setFeedbackId(matching.feedback_id)
       setFeedback(detail)
       setNotes('')
     } catch (errorValue) {
@@ -65,6 +102,42 @@ export default function ResumeFeedbackPage() {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (!waitingForResumeId) return
+    let cancelled = false
+    let timer: number | null = null
+
+    async function poll() {
+      if (cancelled) return
+      try {
+        const items = await listMyResumeFeedback(20)
+        if (cancelled) return
+
+        const matching = items.find((row) => row.resume_id === waitingForResumeId) ?? null
+        if (matching?.feedback_id) {
+          const detail = await getResumeFeedback(matching.feedback_id)
+          if (cancelled) return
+          setFeedbackId(matching.feedback_id)
+          setFeedback(detail)
+          setWaitingForResumeId(null)
+          setLoading(false)
+          return
+        }
+
+        // Still waiting.
+        timer = window.setTimeout(() => void poll(), 1500)
+      } catch {
+        timer = window.setTimeout(() => void poll(), 2000)
+      }
+    }
+
+    void poll()
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [waitingForResumeId])
 
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true)
@@ -118,12 +191,12 @@ export default function ResumeFeedbackPage() {
 
       const groups = Array.from(groupMap.values())
       for (const group of groups) {
-        group.feedbackItems.sort((a, b) => (b.feedback.created_at ?? '').localeCompare(a.feedback.created_at ?? ''))
+        group.feedbackItems.sort((a, b) => parseTimeMs(b.feedback.created_at) - parseTimeMs(a.feedback.created_at))
       }
       groups.sort((a, b) => {
-        const aTop = a.feedbackItems[0]?.feedback.created_at ?? ''
-        const bTop = b.feedbackItems[0]?.feedback.created_at ?? ''
-        return bTop.localeCompare(aTop)
+        const aTop = parseTimeMs(a.feedbackItems[0]?.feedback.created_at)
+        const bTop = parseTimeMs(b.feedbackItems[0]?.feedback.created_at)
+        return bTop - aTop
       })
 
       setHistoryGroups(groups)
@@ -169,6 +242,7 @@ export default function ResumeFeedbackPage() {
       setNotes('')
       setSuccess('New AI feedback generated from your latest resume.')
       void loadHistory()
+      setWaitingForResumeId(null)
     } catch (errorValue) {
       setError(normalizeError(errorValue))
     } finally {
@@ -214,17 +288,58 @@ export default function ResumeFeedbackPage() {
     }
   }
 
+  async function handleDeleteResume(resumeId: string, resumeFilename: string) {
+    if (deletingResumeId) return
+
+    const ok = window.confirm(`Delete this resume and its feedback history?\n\n${resumeFilename}`)
+    if (!ok) return
+
+    setDeletingResumeId(resumeId)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await deleteResume(resumeId)
+      setSuccess('Deleted resume history.')
+      await loadLatest()
+      await loadHistory()
+    } catch (errorValue) {
+      setError(normalizeError(errorValue))
+    } finally {
+      setDeletingResumeId(null)
+    }
+  }
+
   return (
     <AppLayout pageLabel="AI Resume Feedback" activeNav="resume">
       <div className="ih-grid">
+        <div className="ih-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
+          <Link className="ih-btnGhost" to="/resume?from=resume-feedback">
+            Resume
+          </Link>
+          <Link className="ih-btnPrimary" to="/resume-feedback">
+            AI Feedback
+          </Link>
+        </div>
+
         <Card title="AI Resume Feedback" subtitle="Strong points, areas to improve, and suggested edits">
           {loading ? <p className="ih-muted">Loading…</p> : null}
           {error ? <p className="ih-error">{error}</p> : null}
           {success ? <p className="ih-success">{success}</p> : null}
 
+          {!loading && waitingForResumeId ? (
+            <p className="ih-muted">Generating feedback for your latest resume…</p>
+          ) : null}
+
           {!loading && !hasFeedback ? (
             <div className="ih-muted">
-              No feedback yet. Upload and analyze your resume first on <Link to="/resume">Resume</Link>, then click Generate New Review.
+              {latestResumeId
+                ? 'No feedback for your latest resume yet. If you just uploaded, this page will update automatically when generation completes.'
+                : (
+                    <>
+                      No feedback yet. Upload your resume first on <Link to="/resume">Resume</Link>, then return here.
+                    </>
+                  )}
             </div>
           ) : null}
 
@@ -272,6 +387,19 @@ export default function ResumeFeedbackPage() {
 
           <div className="ih-divider" />
 
+          <div style={{ marginTop: 10 }}>
+            <div className="ih-subtitle">Skill Gaps / Suggestions</div>
+            {skillGaps.length ? (
+              <ul className="ih-list">{skillGaps.map((item) => (
+                <li key={item}>{item}</li>
+              ))}</ul>
+            ) : (
+              <div className="ih-muted">—</div>
+            )}
+          </div>
+
+          <div className="ih-divider" />
+
           <div className="ih-subtitle">Notes</div>
           <textarea
             className="ih-input"
@@ -306,16 +434,6 @@ export default function ResumeFeedbackPage() {
           </div>
         </Card>
 
-        <Card title="Skill Gaps / Suggestions" subtitle="Suggested skills to add and sections to strengthen">
-          {skillGaps.length ? (
-            <ul className="ih-list">{skillGaps.map((item) => (
-              <li key={item}>{item}</li>
-            ))}</ul>
-          ) : (
-            <div className="ih-muted">No skill gap suggestions yet.</div>
-          )}
-        </Card>
-
         <Card title="Resume Feedback History" subtitle="Grouped by resume version (newest at top)">
           {loadingHistory ? <div className="ih-muted">Loading history…</div> : null}
 
@@ -333,9 +451,24 @@ export default function ResumeFeedbackPage() {
                     </div>
 
                     {group.resumeId ? (
-                      <button className="ih-btnGhost" type="button" onClick={() => void handleDownloadResume(group.resumeId!)}>
-                        Download Resume
-                      </button>
+                      <div className="ih-actions" style={{ gap: 8 }}>
+                        <button
+                          className="ih-btnGhost"
+                          type="button"
+                          disabled={Boolean(deletingResumeId) || generating}
+                          onClick={() => void handleDownloadResume(group.resumeId!)}
+                        >
+                          Download Resume
+                        </button>
+                        <button
+                          className="ih-btnGhost"
+                          type="button"
+                          disabled={Boolean(deletingResumeId) || generating}
+                          onClick={() => void handleDeleteResume(group.resumeId!, group.resumeFilename)}
+                        >
+                          {deletingResumeId === group.resumeId ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
                     ) : null}
                   </div>
 

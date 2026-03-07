@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from pydantic import BaseModel, Field
+
+from app.utils.time import now_eastern
 
 
 class ResumeDocument(BaseModel):
@@ -20,5 +22,5 @@ class ResumeDocument(BaseModel):
 
     extracted_text: str | None = Field(default=None, max_length=200000)
 
-    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    uploaded_at: datetime = Field(default_factory=now_eastern)
     analyzed_at: datetime | None = None

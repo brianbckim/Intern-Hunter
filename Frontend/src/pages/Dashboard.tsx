@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useNavigate } from 'react-router-dom'
 import {
     ApiError,
+    ensureRecommendations,
+    generateResumeFeedback,
     generateRecommendations,
     getResumeFeedback,
     listMyResumeFeedback,
@@ -59,7 +61,7 @@ export default function Dashboard() {
     function formatDate(isoOrDate: string): string {
         const d = new Date(isoOrDate)
         if (Number.isNaN(d.getTime())) return ''
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        return d.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })
     }
 
     const refreshResumes = useCallback(async () => {
@@ -132,7 +134,7 @@ export default function Dashboard() {
             const value = await generateRecommendations({
                 limit: 3,
                 candidate_pool: 40,
-                use_ai: true,
+                use_ai: false,
                 resume_id: latest.resume_id,
             })
             setRecommendations(value)
@@ -155,8 +157,23 @@ export default function Dashboard() {
         setResumeError(null)
         setUploading(true)
         try {
-            await uploadResume(file)
+            const uploaded = await uploadResume(file)
             await refreshResumes()
+
+            void (async () => {
+                try {
+                    await generateResumeFeedback(uploaded.resume_id)
+                    await refreshFeedback()
+
+                    await ensureRecommendations({
+                        limit: 20,
+                        candidate_pool: 80,
+                        use_ai: true,
+                        resume_id: uploaded.resume_id,
+                    })
+                } catch {
+                }
+            })()
         } catch (e) {
             setResumeError(friendlyResumeError(e))
         } finally {
@@ -268,7 +285,7 @@ export default function Dashboard() {
                                     disabled={!resume.uploaded}
                                     onClick={() => navigate('/resume-feedback')}
                                 >
-                                    Request AI Review
+                                    AI Feedback
                                 </button>
                             </div>
                         </Card>
@@ -278,7 +295,7 @@ export default function Dashboard() {
                             {feedbackError ? <div className="ih-muted">{feedbackError}</div> : null}
 
                             {!loadingFeedback && aiFeedback.length === 0 ? (
-                                <div className="ih-muted">No AI feedback yet. Click “Request AI Review” to generate one.</div>
+                                <div className="ih-muted">No AI feedback yet. Click “AI Feedback” to generate one.</div>
                             ) : null}
 
                             {aiFeedback.length ? (

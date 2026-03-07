@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.utils.time import now_eastern
+
 
 class ResumeFeedbackNote(BaseModel):
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=now_eastern)
     text: str = Field(min_length=1, max_length=10000)
 
 
@@ -24,7 +26,7 @@ class ResumeFeedback(BaseModel):
     suggested_edits: list[str] = Field(default_factory=list, max_length=200)
     skill_gaps: list[str] = Field(default_factory=list, max_length=100)
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=now_eastern)
 
     # User-controlled notes ("Save Notes")
     # saved_notes stores the latest note for convenience/legacy UI.

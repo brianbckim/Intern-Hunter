@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import mammoth from 'mammoth'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import {
   ApiError,
   downloadResumeFile,
   downloadResumePreviewFile,
+  ensureRecommendations,
+  generateResumeFeedback,
   getResume,
   listMyResumes,
   reextractResume,
@@ -82,6 +84,7 @@ function friendlyErrorMessage(errorValue: unknown): string {
 
 export default function ResumePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [resumeId, setResumeId] = useState<string | null>(null)
   const [resumeDetail, setResumeDetail] = useState<ResumeDetail | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
@@ -92,6 +95,13 @@ export default function ResumePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [emptyPreviewMessage, setEmptyPreviewMessage] = useState<string>('No preview available yet. Upload a file to start.')
+
+  function formatDate(isoOrDate: string | null | undefined): string {
+    if (!isoOrDate) return '—'
+    const d = new Date(isoOrDate)
+    if (Number.isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })
+  }
 
   const loadResumePreview = useCallback(async (targetResumeId: string) => {
     setLoadingPreview(true)
@@ -173,14 +183,27 @@ export default function ResumePage() {
       setError(null)
       try {
         const items = await listMyResumes()
-        setResumeId(items[0]?.resume_id ?? null)
+
+        const existingResumeId = items[0]?.resume_id ?? null
+        const params = new URLSearchParams(location.search)
+        const from = params.get('from')
+        const allowResumeView = from === 'resume-feedback'
+
+        // If a resume is already uploaded, route users to /resume-feedback by default.
+        // Only allow /resume when explicitly coming from the Resume tab on /resume-feedback.
+        if (existingResumeId && !allowResumeView) {
+          navigate('/resume-feedback', { replace: true })
+          return
+        }
+
+        setResumeId(existingResumeId)
       } catch (errorValue) {
         setError(friendlyErrorMessage(errorValue))
       }
     }
 
     void loadLatestResumeId()
-  }, [])
+  }, [location.search, navigate])
 
   useEffect(() => {
     if (resumeId) {
@@ -215,6 +238,23 @@ export default function ResumePage() {
       })
       setResumeId(response.resume_id)
       setSuccess('Resume uploaded successfully.')
+
+      // Generate a fresh AI feedback snapshot once, in the background.
+      // After feedback completes, precompute AI job recommendations for /jobs?tab=ai.
+      void (async () => {
+        try {
+          await generateResumeFeedback(response.resume_id)
+
+          await ensureRecommendations({
+            limit: 20,
+            candidate_pool: 80,
+            use_ai: true,
+            resume_id: response.resume_id,
+          })
+        } catch {
+          // best-effort background precompute
+        }
+      })()
     } catch (errorValue) {
       setError(friendlyErrorMessage(errorValue))
     } finally {
@@ -242,11 +282,25 @@ export default function ResumePage() {
   return (
     <AppLayout pageLabel="Resume Upload" activeNav="resume">
       <div className="ih-grid">
+        <div className="ih-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
+          <Link className="ih-btnPrimary" to="/resume">
+            Resume
+          </Link>
+          <Link className="ih-btnGhost" to="/resume-feedback">
+            AI Feedback
+          </Link>
+        </div>
+
         <ResumeUpload
           uploading={uploading}
           uploadProgress={uploadProgress}
           analyzeDisabled={!resumeId}
           onUpload={handleUpload}
+          uploadedStatus={{
+            uploaded: Boolean(resumeId),
+            fileName: resumeDetail?.original_filename ?? '—',
+            lastUpdated: formatDate(resumeDetail?.uploaded_at),
+          }}
           onOpenFeedback={() => navigate('/resume-feedback')}
           onAnalyze={async () => {
             if (!resumeId) return

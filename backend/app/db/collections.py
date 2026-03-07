@@ -25,3 +25,7 @@ def jobs_collection(db: AsyncIOMotorDatabase):
 
 def applications_collection(db: AsyncIOMotorDatabase):
     return db["applications"]
+
+
+def recommendations_snapshots_collection(db: AsyncIOMotorDatabase):
+    return db["recommendations_snapshots"]

@@ -23,7 +23,13 @@ def _normalize_text(value: str) -> str:
 
 
 def _clean_fallback_text(value: str) -> str:
-    """Remove common binary/container noise from best-effort DOC extraction."""
+    """Remove common binary/container noise from best-effort DOC extraction.
+
+    Legacy .doc fallbacks can produce a mix of real resume text plus long "garbage tail"
+    (fonts, embedded objects, author/template fields). This cleaner is intentionally
+    conservative: it keeps human-readable lines, but aggressively drops compact
+    symbol-heavy lines and truncates after a long run of junk.
+    """
 
     blocked_patterns = (
         "[content_types].xml",
@@ -32,31 +38,139 @@ def _clean_fallback_text(value: str) -> str:
         "theme/theme",
         "docprops/",
         "application/vnd.openxmlformats",
+        # Common Word binary metadata / templates / identifiers
+        "normal.dotm",
+        "microsoft office word",
+        "microsoft word",
+        "word.document",
+        "msworddoc",
+        "word.document.8",
+        "_pid_",
+        "_pid_hlinks",
+        # Frequently leaked embedded/font tool markers
+        "ttfautohint",
+        "wrd_embed",
+        "compobj",
     )
 
+    blocked_exact = {
+        # Font names that frequently leak from legacy .doc binaries
+        "arial",
+        "calibri",
+        "cambria",
+        "cambria math",
+        "courier new",
+        "georgia",
+        "malgun gothic",
+        "noto sans symbols",
+        "symbol",
+        "times new roman",
+        "wingdings",
+        # Common short binary markers
+        "bjbj",
+    }
+
+    email_re = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+    url_re = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+    phone_re = re.compile(r"\+?\d[\d\s().-]{7,}\d")
+
     kept: list[str] = []
+    metadata_score = 0
+    tail_bad_streak = 0
+    seen_good = False
+
     for line in value.split("\n"):
         stripped = line.strip()
         if not stripped:
             continue
 
         lowered = stripped.lower()
-        if any(pattern in lowered for pattern in blocked_patterns):
+        if any(pattern in lowered for pattern in blocked_patterns) or lowered in blocked_exact:
+            metadata_score = min(metadata_score + 2, 10)
+            tail_bad_streak += 1
+            if seen_good and tail_bad_streak >= 120:
+                break
             continue
 
-        # keep lines that look human-readable and avoid symbol-heavy gibberish
+        has_email = bool(email_re.search(stripped))
+        has_url = bool(url_re.search(stripped))
+        has_phone = bool(phone_re.search(stripped))
+        is_contact = has_email or has_url or has_phone
+
         alpha_count = sum(ch.isalpha() for ch in stripped)
         printable_count = sum(ch.isprintable() for ch in stripped)
         symbol_count = sum(not ch.isalnum() and not ch.isspace() for ch in stripped)
+        alnum_space_count = sum(ch.isalnum() or ch.isspace() for ch in stripped)
+        alnum_space_ratio = alnum_space_count / max(len(stripped), 1)
+        symbol_ratio = symbol_count / max(len(stripped), 1)
 
-        if alpha_count < 2:
+        has_spaces = " " in stripped
+        is_heading_like = bool(re.fullmatch(r"[A-Z][A-Z\s/&-]{2,}", stripped))
+        word_token_count = len(re.findall(r"[A-Za-z]{2,}", stripped))
+
+        # Compact, symbol-heavy, no-space lines are almost always binary noise.
+        compact_symbol_heavy = (
+            not has_spaces
+            and not is_heading_like
+            and not is_contact
+            and len(stripped) <= 50
+            and (symbol_ratio >= 0.15 or alnum_space_ratio < 0.85)
+        )
+
+        # Token-poor short lines (often random bytes decoded) are junk.
+        token_poor_short = (
+            not has_spaces
+            and not is_heading_like
+            and not is_contact
+            and len(stripped) <= 16
+            and (word_token_count == 0 or alpha_count < 4)
+            and not stripped.isalpha()
+        )
+
+        looks_like_binary_token = (
+            not has_spaces
+            and not is_heading_like
+            and not is_contact
+            and len(stripped) >= 8
+            and bool(re.fullmatch(r"[A-Za-z0-9`'\[\]{}()<>!@#$%^&*_=+\\|:;.,?-]{8,}", stripped))
+        )
+
+        low_quality = compact_symbol_heavy or token_poor_short or looks_like_binary_token
+        if low_quality:
+            metadata_score = min(metadata_score + 1, 10)
+            tail_bad_streak += 1
+            if seen_good and tail_bad_streak >= 120:
+                break
             continue
-        if printable_count and (alpha_count / max(len(stripped), 1)) < 0.2:
+
+        # Reset tail streak once we see a readable line.
+        tail_bad_streak = 0
+
+        # If we're in/near a metadata block, drop author/template labels.
+        name_like = bool(re.fullmatch(r"[A-Z][a-z]{1,40},\s+[A-Z][a-z]{1,40}", stripped))
+        label_like = lowered in {"title", "author", "subject", "company", "manager"}
+        if metadata_score >= 4 and (name_like or label_like):
             continue
-        if symbol_count > len(stripped) * 0.4:
+
+        if alpha_count < 2 and not is_contact and not is_heading_like:
+            metadata_score = min(metadata_score + 1, 10)
+            continue
+
+        if printable_count and (alpha_count / max(len(stripped), 1)) < 0.2 and not is_contact and not is_heading_like:
+            metadata_score = min(metadata_score + 1, 10)
+            continue
+
+        if symbol_count > len(stripped) * 0.4 and not is_contact and not is_heading_like:
+            metadata_score = min(metadata_score + 1, 10)
             continue
 
         kept.append(stripped)
+        seen_good = True
+        metadata_score = max(metadata_score - 1, 0)
+
+    # Trim any trailing font-only lines that slipped through.
+    while kept and kept[-1].strip().lower() in blocked_exact:
+        kept.pop()
 
     return "\n".join(kept)
 

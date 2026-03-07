@@ -13,6 +13,8 @@ export const API_ENDPOINTS = {
   },
   recommendations: {
     generate: '/api/recommendations/generate',
+    ensure: '/api/recommendations/ensure',
+    latest: '/api/recommendations/latest',
   },
 }
 
@@ -138,6 +140,18 @@ export type RecommendationsResponse = {
   jobs: RecommendationJob[]
 }
 
+export type RecommendationsSnapshotStatus = 'missing' | 'pending' | 'ready' | 'error'
+
+export type RecommendationsSnapshotResponse = {
+  status: RecommendationsSnapshotStatus
+  snapshot_id: string | null
+  resume_id: string | null
+  created_at: string | null
+  updated_at: string | null
+  data: RecommendationsResponse | null
+  error: string | null
+}
+
 export type GenerateRecommendationsRequest = {
   limit?: number
   candidate_pool?: number
@@ -153,6 +167,21 @@ export async function generateRecommendations(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+export async function ensureRecommendations(
+  payload: GenerateRecommendationsRequest
+): Promise<RecommendationsSnapshotResponse> {
+  return apiJson<RecommendationsSnapshotResponse>(API_ENDPOINTS.recommendations.ensure, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getLatestRecommendations(resumeId?: string | null): Promise<RecommendationsSnapshotResponse> {
+  const url = resumeId ? `${API_ENDPOINTS.recommendations.latest}?resume_id=${encodeURIComponent(resumeId)}` : API_ENDPOINTS.recommendations.latest
+  return apiJson<RecommendationsSnapshotResponse>(url)
 }
 
 export type RecruiterItem = {
@@ -241,6 +270,19 @@ export async function getResume(resumeId: string): Promise<ResumeDetail> {
 export async function reextractResume(resumeId: string): Promise<ResumeDetail> {
   return apiJson<ResumeDetail>(`/api/resumes/${resumeId}/reextract`, {
     method: 'POST',
+  })
+}
+
+export type DeleteResumeResponse = {
+  deleted: boolean
+  resume_id: string
+  deleted_feedback?: number
+  deleted_recommendations?: number
+}
+
+export async function deleteResume(resumeId: string): Promise<DeleteResumeResponse> {
+  return apiJson<DeleteResumeResponse>(`/api/resumes/${resumeId}`, {
+    method: 'DELETE',
   })
 }
 

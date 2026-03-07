@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -15,8 +15,11 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_user_email
-from app.db.collections import resumes_collection
+from app.db.collections import recommendations_snapshots_collection, resume_feedback_collection, resumes_collection
 from app.db.local_store import create_resume as create_local_resume
+from app.db.local_store import delete_recommendations_snapshots_by_resume_id_for_user as delete_local_recommendations_by_resume_id
+from app.db.local_store import delete_resume_by_id_for_user as delete_local_resume_by_id_for_user
+from app.db.local_store import delete_resume_feedback_by_resume_id_for_user as delete_local_feedback_by_resume_id
 from app.db.local_store import get_resume_by_id_for_user as get_local_resume_by_id_for_user
 from app.db.local_store import list_resumes_by_user as list_local_resumes_by_user
 from app.db.local_store import update_resume_by_id_for_user as update_local_resume_by_id_for_user
@@ -24,6 +27,7 @@ from app.db.mongo import get_database
 from app.schemas.resume import ResumeDocument
 from app.services.resume_conversion import convert_doc_to_pdf
 from app.services.resume_extraction import extract_resume_text
+from app.utils.time import now_eastern
 
 
 router = APIRouter(prefix="/resumes")
@@ -50,6 +54,13 @@ class ResumeListItem(BaseModel):
     analyzed_at: datetime | None = None
 
 
+class DeleteResumeResponse(BaseModel):
+    deleted: bool
+    resume_id: str
+    deleted_feedback: int = 0
+    deleted_recommendations: int = 0
+
+
 def _safe_segment(value: str) -> str:
     value = value.strip().lower()
     value = value.replace("@", "_at_")
@@ -71,7 +82,21 @@ def _parse_datetime(value: str | datetime | None) -> datetime:
         return value
     if isinstance(value, str):
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return datetime.now(timezone.utc)
+    return now_eastern()
+
+
+def _safe_unlink(storage_ref: str | None) -> None:
+    if not storage_ref:
+        return
+    try:
+        file_path = (_backend_root() / str(storage_ref)).resolve()
+        uploads_root = _uploads_root().resolve()
+        if uploads_root not in file_path.parents:
+            return
+        if file_path.exists() and file_path.is_file():
+            file_path.unlink(missing_ok=True)
+    except Exception:
+        return
 
 
 def _validate_upload(file: UploadFile) -> None:
@@ -117,16 +142,22 @@ async def upload_resume(
 
     preview_storage_ref: str | None = None
     preview_content_type: str | None = None
+    extraction_source = stored_path
     if ext == ".doc":
         converted_path = await run_in_threadpool(convert_doc_to_pdf, stored_path, stored_path.parent)
         if converted_path is not None:
             preview_storage_ref = str(converted_path.relative_to(_backend_root()))
             preview_content_type = "application/pdf"
 
-    extracted_text = await run_in_threadpool(extract_resume_text, stored_path)
-    analyzed_at = datetime.now(timezone.utc) if extracted_text is not None else None
+            # Prefer extracting text from the converted PDF.
+            # Legacy .doc binary fallback extraction can include Word metadata
+            # (templates, fonts, author names) that pollutes the AI prompt.
+            extraction_source = converted_path
 
-    uploaded_at = datetime.now(timezone.utc)
+    extracted_text = await run_in_threadpool(extract_resume_text, extraction_source)
+    analyzed_at = now_eastern() if extracted_text is not None else None
+
+    uploaded_at = now_eastern()
     resume = ResumeDocument(
         user_email=user_email,
         original_filename=original_filename,
@@ -338,8 +369,14 @@ async def reextract_resume_text(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Resume file missing on server")
 
-    extracted_text = await run_in_threadpool(extract_resume_text, file_path)
-    analyzed_at = datetime.now(timezone.utc) if extracted_text is not None else None
+    extraction_source = file_path
+    if file_path.suffix.lower() == ".doc":
+        converted_path = await run_in_threadpool(convert_doc_to_pdf, file_path, file_path.parent)
+        if converted_path is not None:
+            extraction_source = converted_path
+
+    extracted_text = await run_in_threadpool(extract_resume_text, extraction_source)
+    analyzed_at = now_eastern() if extracted_text is not None else None
 
     if db is None:
         updated = update_local_resume_by_id_for_user(
@@ -370,3 +407,62 @@ async def reextract_resume_text(
 
     refreshed["resume_id"] = str(refreshed.pop("_id"))
     return refreshed
+
+
+@router.delete("/{resume_id}", response_model=DeleteResumeResponse)
+async def delete_resume(
+    resume_id: str,
+    user_email: str = Depends(get_current_user_email),
+) -> DeleteResumeResponse:
+    db = get_database()
+
+    if db is None:
+        doc = get_local_resume_by_id_for_user(resume_id=resume_id, user_email=user_email)
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Resume not found")
+
+        _safe_unlink(doc.get("storage_ref"))
+        _safe_unlink(doc.get("preview_storage_ref"))
+
+        deleted = delete_local_resume_by_id_for_user(resume_id=resume_id, user_email=user_email)
+        if deleted is None:
+            raise HTTPException(status_code=404, detail="Resume not found")
+
+        deleted_feedback = delete_local_feedback_by_resume_id(resume_id=resume_id, user_email=user_email)
+        deleted_recommendations = delete_local_recommendations_by_resume_id(resume_id=resume_id, user_email=user_email)
+        return DeleteResumeResponse(
+            deleted=True,
+            resume_id=resume_id,
+            deleted_feedback=deleted_feedback,
+            deleted_recommendations=deleted_recommendations,
+        )
+
+    resumes = resumes_collection(db)
+    try:
+        oid = ObjectId(resume_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid resume_id")
+
+    doc = await resumes.find_one({"_id": oid, "user_email": user_email})
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    _safe_unlink(doc.get("storage_ref"))
+    _safe_unlink(doc.get("preview_storage_ref"))
+
+    result = await resumes.delete_one({"_id": oid, "user_email": user_email})
+    if result.deleted_count != 1:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    feedback_coll = resume_feedback_collection(db)
+    feedback_result = await feedback_coll.delete_many({"user_email": user_email, "resume_id": resume_id})
+
+    rec_coll = recommendations_snapshots_collection(db)
+    rec_result = await rec_coll.delete_many({"user_email": user_email, "resume_id": resume_id})
+
+    return DeleteResumeResponse(
+        deleted=True,
+        resume_id=resume_id,
+        deleted_feedback=int(feedback_result.deleted_count or 0),
+        deleted_recommendations=int(rec_result.deleted_count or 0),
+    )

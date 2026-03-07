@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field
+
+from app.utils.time import now_eastern
 
 
 class ApplicationStatus(str, Enum):
@@ -25,5 +27,5 @@ class JobApplication(BaseModel):
     status: ApplicationStatus = ApplicationStatus.saved
     notes: str | None = Field(default=None, max_length=5000)
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=now_eastern)
+    updated_at: datetime = Field(default_factory=now_eastern)

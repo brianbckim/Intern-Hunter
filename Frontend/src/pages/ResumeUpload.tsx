@@ -7,6 +7,11 @@ type ResumeUploadProps = {
   onUpload: (file: File) => Promise<void>
   onAnalyze: () => void
   onOpenFeedback?: () => void
+  uploadedStatus?: {
+    uploaded: boolean
+    fileName: string
+    lastUpdated: string
+  }
 }
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'doc', 'docx']
@@ -18,6 +23,7 @@ export default function ResumeUpload({
   onUpload,
   onAnalyze,
   onOpenFeedback,
+  uploadedStatus,
 }: ResumeUploadProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -35,6 +41,16 @@ export default function ResumeUpload({
       </div>
 
       <div className="ih-cardBody">
+        {uploadedStatus ? (
+          <div style={{ display: 'grid', gap: 4 }}>
+            <div className="ih-pill">{uploadedStatus.uploaded ? 'Uploaded' : 'Not uploaded'}</div>
+            <div className="ih-muted">
+              File: <strong>{uploadedStatus.fileName}</strong>
+            </div>
+            <div className="ih-muted">Last updated: {uploadedStatus.lastUpdated}</div>
+          </div>
+        ) : null}
+
         <input
           ref={fileInputRef}
           type="file"

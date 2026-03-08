@@ -6,7 +6,6 @@ import {
   ApiError,
   downloadResumeFile,
   deleteResume,
-  generateResumeFeedback,
   getResumeFeedback,
   getResume,
   listMyResumeFeedback,
@@ -32,7 +31,6 @@ export default function ResumeFeedbackPage() {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingHistory, setLoadingHistory] = useState(true)
-  const [generating, setGenerating] = useState(false)
   const [deletingResumeId, setDeletingResumeId] = useState<string | null>(null)
   const [savingNotes, setSavingNotes] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -230,26 +228,6 @@ export default function ResumeFeedbackPage() {
     return []
   }, [feedback])
 
-  async function handleGenerateNew() {
-    setGenerating(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const res = await generateResumeFeedback()
-      setFeedbackId(res.feedback_id)
-      setFeedback(res.feedback)
-      setNotes('')
-      setSuccess('New AI feedback generated from your latest resume.')
-      void loadHistory()
-      setWaitingForResumeId(null)
-    } catch (errorValue) {
-      setError(normalizeError(errorValue))
-    } finally {
-      setGenerating(false)
-    }
-  }
-
   async function handleSaveNotes() {
     if (!feedbackId) return
     const text = notes.trim()
@@ -421,12 +399,9 @@ export default function ResumeFeedbackPage() {
           ) : null}
 
           <div className="ih-actions">
-            <button className="ih-btnGhost" disabled={generating} onClick={() => void handleGenerateNew()}>
-              {generating ? 'Generating…' : 'Generate New Review'}
-            </button>
             <button
               className="ih-btnPrimary"
-              disabled={!feedbackId || savingNotes || generating || !notes.trim()}
+              disabled={!feedbackId || savingNotes || !notes.trim()}
               onClick={() => void handleSaveNotes()}
             >
               {savingNotes ? 'Saving…' : 'Save Notes'}
@@ -455,7 +430,7 @@ export default function ResumeFeedbackPage() {
                         <button
                           className="ih-btnGhost"
                           type="button"
-                          disabled={Boolean(deletingResumeId) || generating}
+                          disabled={Boolean(deletingResumeId)}
                           onClick={() => void handleDownloadResume(group.resumeId!)}
                         >
                           Download Resume
@@ -463,7 +438,7 @@ export default function ResumeFeedbackPage() {
                         <button
                           className="ih-btnGhost"
                           type="button"
-                          disabled={Boolean(deletingResumeId) || generating}
+                          disabled={Boolean(deletingResumeId)}
                           onClick={() => void handleDeleteResume(group.resumeId!, group.resumeFilename)}
                         >
                           {deletingResumeId === group.resumeId ? 'Deleting…' : 'Delete'}

@@ -247,7 +247,7 @@ export default function ResumePage() {
 
           await ensureRecommendations({
             limit: 20,
-            candidate_pool: 80,
+            candidate_pool: 40,
             use_ai: true,
             resume_id: response.resume_id,
           })
@@ -301,7 +301,6 @@ export default function ResumePage() {
             fileName: resumeDetail?.original_filename ?? '—',
             lastUpdated: formatDate(resumeDetail?.uploaded_at),
           }}
-          onOpenFeedback={() => navigate('/resume-feedback')}
           onAnalyze={async () => {
             if (!resumeId) return
             setSuccess(null)

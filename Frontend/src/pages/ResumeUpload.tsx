@@ -6,7 +6,6 @@ type ResumeUploadProps = {
   analyzeDisabled: boolean
   onUpload: (file: File) => Promise<void>
   onAnalyze: () => void
-  onOpenFeedback?: () => void
   uploadedStatus?: {
     uploaded: boolean
     fileName: string
@@ -22,7 +21,6 @@ export default function ResumeUpload({
   analyzeDisabled,
   onUpload,
   onAnalyze,
-  onOpenFeedback,
   uploadedStatus,
 }: ResumeUploadProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -85,13 +83,6 @@ export default function ResumeUpload({
           </button>
           <button className="ih-btnGhost" disabled={analyzeDisabled || uploading} onClick={onAnalyze}>
             Analyze Resume
-          </button>
-          <button
-            className="ih-btnGhost"
-            disabled={analyzeDisabled || uploading || !onOpenFeedback}
-            onClick={() => onOpenFeedback?.()}
-          >
-            AI Feedback
           </button>
         </div>
 

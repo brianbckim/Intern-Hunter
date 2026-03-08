@@ -79,8 +79,6 @@ async def _compute_recommendations(payload: GenerateRecommendationsRequest, user
         return GenerateRecommendationsResponse(ai_used=False, jobs=[])
 
     profile = await _get_profile_for_user(user_email)
-    scored = score_jobs_for_user(jobs, profile=profile, limit=payload.candidate_pool)
-    candidates = scored
 
     resume_text: str | None = None
     if payload.resume_id is not None or payload.use_ai:
@@ -91,6 +89,14 @@ async def _compute_recommendations(payload: GenerateRecommendationsRequest, user
                 extracted = doc.get("extracted_text")
                 if isinstance(extracted, str) and extracted.strip():
                     resume_text = extracted.strip()[:12000]
+
+    scored = score_jobs_for_user(
+        jobs,
+        profile=profile,
+        resume_text=resume_text,
+        limit=payload.candidate_pool,
+    )
+    candidates = scored
 
     response = GenerateRecommendationsResponse(ai_used=False)
 

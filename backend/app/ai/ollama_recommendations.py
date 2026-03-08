@@ -69,41 +69,6 @@ def _as_str_map(value: object, *, limit: int) -> dict[str, str]:
             out[key] = val
     return out
 
-
-def _as_float_map(value: object, *, limit: int) -> dict[str, float]:
-    if not isinstance(value, dict):
-        return {}
-    out: dict[str, float] = {}
-    for k, v in value.items():
-        if len(out) >= limit:
-            break
-        if not isinstance(k, str):
-            continue
-        key = k.strip()
-        if not key:
-            continue
-
-        number: float | None = None
-        if isinstance(v, (int, float)):
-            number = float(v)
-        elif isinstance(v, str):
-            try:
-                number = float(v.strip())
-            except Exception:
-                number = None
-
-        if number is None:
-            continue
-        out[key] = number
-    return out
-
-
-def _chunked(items: list[dict[str, str]], chunk_size: int) -> list[list[dict[str, str]]]:
-    if chunk_size <= 0:
-        return [items]
-    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
-
-
 class OllamaRecommendationsProvider:
     async def _chat_json(self, *, system: str, user: str) -> dict:
         payload = {
@@ -177,72 +142,9 @@ class OllamaRecommendationsProvider:
         if len(resume_snippet) > 3000:
             resume_snippet = resume_snippet[:3000]
 
-        # Stage 1) Chunked scoring to avoid context truncation.
-        # We score ALL jobs in each chunk, then do a global shortlist (no rolling bias).
-        chunk_size = 40
-        shortlist_size = min(len(compact_jobs), max(40, limit * 2))
-
-        scores: dict[str, float] = {}
-        score_reasons: dict[str, str] = {}
-
-        scoring_system = (
-            "You are a helpful career coach. "
-            "Return ONLY a single JSON object (no markdown, no prose). "
-            "The JSON MUST include exactly these keys: scores, reasons. "
-            "scores must be an object mapping uid -> number (0..100). "
-            "reasons must be an object mapping uid -> short reason (<= 140 chars). "
-            "Do not omit keys. Do not return extra keys."
-        )
-
-        chunks = _chunked(compact_jobs, chunk_size)
-        try:
-            for chunk in chunks:
-                chunk_uids = [j.get("uid", "") for j in chunk if j.get("uid")]
-                if not chunk_uids:
-                    continue
-
-                scoring_user = (
-                    "Score each candidate job for this user.\n"
-                    "Rules:\n"
-                    "- For EVERY job uid in candidate_jobs, output a score 0..100 and a short reason.\n"
-                    "- Scores should reflect match to user profile + resume and the listing fields.\n\n"
-                    f"USER_PROFILE: {user_profile}\n\n"
-                    f"RESUME_SNIPPET (optional):\n{resume_snippet}\n\n"
-                    "CANDIDATE_JOBS (JSON):\n"
-                    + json.dumps(chunk, ensure_ascii=False, separators=(",", ":"))
-                )
-
-                parsed_chunk = await self._chat_json(system=scoring_system, user=scoring_user)
-                chunk_scores = _as_float_map(parsed_chunk.get("scores"), limit=len(chunk_uids) + 5)
-                chunk_reasons = _as_str_map(parsed_chunk.get("reasons"), limit=len(chunk_uids) + 5)
-
-                for uid in chunk_uids:
-                    score = chunk_scores.get(uid)
-                    if score is None:
-                        score = 0.0
-                    if score < 0:
-                        score = 0.0
-                    if score > 100:
-                        score = 100.0
-                    scores[uid] = score
-
-                    reason = chunk_reasons.get(uid)
-                    if isinstance(reason, str) and reason.strip():
-                        score_reasons[uid] = reason.strip()[:200]
-
-        except Exception:
-            scores = {}
-            score_reasons = {}
-
-        # Build shortlist
-        if scores:
-            sorted_uids = sorted(scores.keys(), key=lambda uid: (scores.get(uid, 0.0), uid), reverse=True)
-            shortlist_uids = set(sorted_uids[:shortlist_size])
-            shortlist_jobs = [j for j in compact_jobs if j.get("uid") in shortlist_uids]
-        else:
-            shortlist_jobs = compact_jobs
-
-        # Stage 2) Final rerank and structured summary on shortlist only.
+        # Single-call mode: assume candidate_jobs are already pre-filtered/ranked heuristically.
+        # Do one final rerank + structured summary over the provided candidate list.
+        shortlist_jobs = compact_jobs
         user = (
             "Given the user profile and the candidate internship listings, select and rank the best matches.\n"
             "Constraints:\n"
@@ -284,8 +186,8 @@ class OllamaRecommendationsProvider:
             if len(filtered) >= limit:
                 break
 
-        if not job_reasons and score_reasons:
-            job_reasons = {uid: score_reasons.get(uid, "") for uid in filtered[:limit] if score_reasons.get(uid)}
+        if not job_reasons:
+            job_reasons = {uid: "Recommended based on your profile." for uid in filtered[:limit]}
 
         return CareerRecommendations(
             career_summary=career_summary_str[:800],

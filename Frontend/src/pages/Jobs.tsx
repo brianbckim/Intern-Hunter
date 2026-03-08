@@ -265,7 +265,7 @@ export default function Jobs() {
 
         const ensured = await ensureRecommendations({
           limit: 20,
-          candidate_pool: 80,
+          candidate_pool: 40,
           use_ai: true,
           resume_id: latestResumeId,
         })

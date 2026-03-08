@@ -1,0 +1,364 @@
+python
+java
+c
+c++
+c#
+go
+rust
+kotlin
+swift
+objective-c
+scala
+typescript
+javascript
+php
+ruby
+matlab
+r
+julia
+bash
+powershell
+sql
+mysql
+postgresql
+sqlite
+oracle
+mongodb
+cassandra
+redis
+dynamodb
+neo4j
+hbase
+cockroachdb
+snowflake
+bigquery
+databricks
+apache spark
+apache hadoop
+apache hive
+apache flink
+apache beam
+kafka
+rabbitmq
+activemq
+zeromq
+grpc
+rest api
+graphql
+soap
+json
+xml
+yaml
+protobuf
+openapi
+swagger
+oauth
+jwt
+saml
+docker
+kubernetes
+helm
+terraform
+ansible
+chef
+puppet
+jenkins
+gitlab ci
+github actions
+circleci
+travis ci
+azure devops
+aws
+gcp
+azure
+aws lambda
+aws ec2
+aws s3
+aws rds
+aws dynamodb
+aws cloudwatch
+aws cloudformation
+aws eks
+aws ecs
+gcp compute engine
+gcp cloud functions
+gcp cloud run
+gcp bigquery
+gcp pubsub
+gcp kubernetes engine
+azure functions
+azure app service
+azure kubernetes service
+linux
+unix
+ubuntu
+debian
+centos
+red hat
+windows server
+macos
+virtualbox
+vmware
+kvm
+qemu
+openstack
+networking
+tcp
+udp
+http
+https
+dns
+dhcp
+ssh
+tls
+ssl
+vpn
+load balancing
+nginx
+apache http server
+haproxy
+envoy
+istio
+linkerd
+microservices
+monolithic architecture
+service mesh
+event driven architecture
+distributed systems
+concurrency
+multithreading
+parallel computing
+high availability
+fault tolerance
+consensus algorithms
+raft
+paxos
+mapreduce
+data structures
+algorithms
+object oriented programming
+functional programming
+design patterns
+clean architecture
+domain driven design
+test driven development
+unit testing
+integration testing
+system testing
+pytest
+unittest
+junit
+mockito
+selenium
+cypress
+playwright
+jest
+mocha
+chai
+karma
+react
+angular
+vue
+svelte
+next.js
+nuxt.js
+gatsby
+redux
+mobx
+tailwind css
+bootstrap
+material ui
+chakra ui
+sass
+less
+webpack
+vite
+babel
+node.js
+express
+fastapi
+flask
+django
+spring
+spring boot
+spring cloud
+micronaut
+quarkus
+laravel
+symfony
+rails
+asp.net
+asp.net core
+blazor
+electron
+react native
+flutter
+android sdk
+android studio
+ios development
+xcode
+swiftui
+unity
+unreal engine
+opengl
+directx
+webgl
+three.js
+game development
+computer graphics
+image processing
+signal processing
+machine learning
+deep learning
+neural networks
+convolutional neural networks
+recurrent neural networks
+transformers
+attention mechanisms
+reinforcement learning
+supervised learning
+unsupervised learning
+self supervised learning
+transfer learning
+meta learning
+few shot learning
+zero shot learning
+natural language processing
+computer vision
+speech recognition
+speech synthesis
+recommendation systems
+anomaly detection
+time series forecasting
+clustering
+classification
+regression
+dimensionality reduction
+feature engineering
+data preprocessing
+data cleaning
+data mining
+data analysis
+data visualization
+pandas
+numpy
+scipy
+matplotlib
+seaborn
+plotly
+scikit-learn
+xgboost
+lightgbm
+catboost
+tensorflow
+keras
+pytorch
+onnx
+huggingface transformers
+langchain
+llamaindex
+large language models
+prompt engineering
+vector databases
+faiss
+pinecone
+weaviate
+milvus
+elastic search
+opensearch
+information retrieval
+search ranking
+ad ranking
+online learning
+ab testing
+multi armed bandits
+bayesian optimization
+hyperparameter tuning
+model deployment
+model serving
+mlflow
+kubeflow
+airflow
+prefect
+dagster
+feature stores
+data pipelines
+etl
+elt
+stream processing
+batch processing
+data warehousing
+data lake
+lakehouse
+delta lake
+apache iceberg
+hudi
+privacy preserving machine learning
+differential privacy
+federated learning
+homomorphic encryption
+secure multiparty computation
+blockchain
+ethereum
+solidity
+smart contracts
+web3
+cryptography
+hashing
+digital signatures
+elliptic curve cryptography
+zero knowledge proofs
+secure coding
+penetration testing
+vulnerability scanning
+static analysis
+dynamic analysis
+reverse engineering
+malware analysis
+digital forensics
+operating systems
+memory management
+process scheduling
+file systems
+kernel development
+device drivers
+embedded systems
+real time systems
+robotics
+autonomous systems
+internet of things
+edge computing
+mobile computing
+human computer interaction
+augmented reality
+virtual reality
+mixed reality
+computer architecture
+instruction set architecture
+gpu programming
+cuda
+opencl
+parallel programming
+numerical computing
+high performance computing
+scientific computing
+bioinformatics
+computational biology
+computational chemistry
+quantum computing
+qiskit
+cirq
+network security
+application security
+cloud security
+identity management
+access control
+logging
+monitoring
+observability
+prometheus
+grafana
+elastic stack
+splunk
+distributed tracing
+open telemetry

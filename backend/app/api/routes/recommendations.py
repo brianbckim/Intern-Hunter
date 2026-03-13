@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -17,6 +19,7 @@ from app.db.local_store import get_resume_by_id_for_user as get_local_resume_by_
 from app.db.local_store import (
     create_recommendations_snapshot as create_local_recommendations_snapshot,
     get_latest_recommendations_snapshot_for_user as get_local_latest_recommendations_snapshot_for_user,
+    list_recommendations_snapshots_by_user,
     update_recommendations_snapshot_by_id_for_user as update_local_recommendations_snapshot_by_id_for_user,
 )
 from app.db.mongo import get_database
@@ -88,7 +91,7 @@ async def _compute_recommendations(payload: GenerateRecommendationsRequest, user
             if isinstance(doc, dict):
                 extracted = doc.get("extracted_text")
                 if isinstance(extracted, str) and extracted.strip():
-                    resume_text = extracted.strip()[:12000]
+                    resume_text = extracted.strip()[:4000]
 
     scored = score_jobs_for_user(
         jobs,
@@ -113,11 +116,10 @@ async def _compute_recommendations(payload: GenerateRecommendationsRequest, user
                     {
                         "uid": c.job.uid,
                         "title": c.job.title or "",
-                        "company": c.job.company or "",
                         "location": c.job.location or "",
                         "category": c.job.category or "",
-                        "url": c.job.url or "",
-                        "sponsorship": c.job.sponsorship or "",
+                        "score": round(c.score, 3),
+                        "matched_keywords": ", ".join(c.matched_keywords[:4]),
                     }
                     for c in candidates
                 ],
@@ -187,6 +189,7 @@ async def _save_snapshot_pending(
     *,
     user_email: str,
     resume_id: str,
+    request_key: str,
     payload: GenerateRecommendationsRequest,
 ) -> tuple[str, datetime]:
     now = now_eastern()
@@ -195,6 +198,7 @@ async def _save_snapshot_pending(
     doc = {
         "user_email": user_email,
         "resume_id": resume_id,
+        "request_key": request_key,
         "status": "pending",
         "request": payload.model_dump(),
         "result": None,
@@ -242,6 +246,15 @@ def _snapshot_day_key(latest: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _snapshot_request_key(latest: dict[str, Any] | None) -> str | None:
+    if not isinstance(latest, dict):
+        return None
+    value = latest.get("request_key")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 async def _load_latest_snapshot(*, user_email: str, resume_id: str) -> dict[str, Any] | None:
     db = get_database()
     if db is None:
@@ -252,6 +265,49 @@ async def _load_latest_snapshot(*, user_email: str, resume_id: str) -> dict[str,
         {"user_email": user_email, "resume_id": resume_id},
         sort=[("created_at", -1)],
     )
+
+
+async def _load_latest_matching_snapshot(*, user_email: str, resume_id: str, request_key: str) -> dict[str, Any] | None:
+    db = get_database()
+    if db is None:
+        rows = list_recommendations_snapshots_by_user(user_email, limit=50)
+        for item in rows:
+            if str(item.get("resume_id")) == str(resume_id) and str(item.get("request_key") or "") == request_key:
+                return item
+        return None
+
+    coll = recommendations_snapshots_collection(db)
+    return await coll.find_one(
+        {"user_email": user_email, "resume_id": resume_id, "request_key": request_key},
+        sort=[("created_at", -1)],
+    )
+
+
+def _build_request_key(*, payload: GenerateRecommendationsRequest, profile: UserProfile, resume_id: str, resume_text: str | None) -> str:
+    request_doc = {
+        "resume_id": resume_id,
+        "limit": int(payload.limit),
+        "candidate_pool": int(payload.candidate_pool),
+        "use_ai": bool(payload.use_ai),
+        "ai_provider": (settings.AI_PROVIDER or "mock").strip().lower(),
+        "ai_model": (settings.OLLAMA_MODEL or "").strip(),
+        "profile_summary": profile_summary(profile),
+        "resume_excerpt": (resume_text or "")[:1500],
+    }
+    encoded = json.dumps(request_doc, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+async def _load_resume_text_for_user(resume_id: str | None, user_email: str) -> str | None:
+    if not resume_id:
+        return None
+    doc = await _get_resume_doc_for_user(resume_id, user_email)
+    if not isinstance(doc, dict):
+        return None
+    extracted = doc.get("extracted_text")
+    if isinstance(extracted, str) and extracted.strip():
+        return extracted.strip()[:4000]
+    return None
 
 
 async def _update_snapshot(
@@ -375,7 +431,11 @@ async def ensure_recommendations(
     if not resume_id:
         return RecommendationsSnapshotStatus(status="missing", snapshot_id=None, resume_id=None)
 
-    latest = await _load_latest_snapshot(user_email=user_email, resume_id=resume_id)
+    profile = await _get_profile_for_user(user_email)
+    resume_text = await _load_resume_text_for_user(resume_id, user_email)
+    request_key = _build_request_key(payload=payload, profile=profile, resume_id=resume_id, resume_text=resume_text)
+
+    latest = await _load_latest_matching_snapshot(user_email=user_email, resume_id=resume_id, request_key=request_key)
     if isinstance(latest, dict):
         status = str(latest.get("status") or "")
         current_day_key = now_eastern().date().isoformat()
@@ -388,7 +448,7 @@ async def ensure_recommendations(
             # Retry automatically when the day changes.
             latest = None
 
-        if isinstance(latest, dict) and status in {"pending", "ready", "error"}:
+        if isinstance(latest, dict) and _snapshot_request_key(latest) == request_key and status in {"pending", "ready", "error"}:
             data = None
             if status == "ready" and isinstance(latest.get("result"), dict):
                 data = GenerateRecommendationsResponse(**latest["result"])
@@ -416,7 +476,12 @@ async def ensure_recommendations(
                 error=str(latest.get("error") or "") or None,
             )
 
-    snapshot_id, now = await _save_snapshot_pending(user_email=user_email, resume_id=resume_id, payload=payload)
+    snapshot_id, now = await _save_snapshot_pending(
+        user_email=user_email,
+        resume_id=resume_id,
+        request_key=request_key,
+        payload=payload,
+    )
     background_tasks.add_task(_run_snapshot_job, snapshot_id=snapshot_id, user_email=user_email, payload=payload)
     return RecommendationsSnapshotStatus(
         status="pending",

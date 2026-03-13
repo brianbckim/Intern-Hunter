@@ -118,10 +118,10 @@ class OllamaRecommendationsProvider:
                 {
                     "uid": uid.strip(),
                     "title": str(item.get("title") or "")[:200],
-                    "company": str(item.get("company") or "")[:120],
-                    "location": str(item.get("location") or "")[:160],
+                    "location": str(item.get("location") or "")[:120],
                     "category": str(item.get("category") or "")[:80],
-                    "sponsorship": str(item.get("sponsorship") or "")[:40],
+                    "score": str(item.get("score") or "")[:16],
+                    "matched_keywords": str(item.get("matched_keywords") or "")[:160],
                 }
             )
 
@@ -139,8 +139,8 @@ class OllamaRecommendationsProvider:
         ).format(limit=limit)
 
         resume_snippet = (resume_text or "").strip()
-        if len(resume_snippet) > 3000:
-            resume_snippet = resume_snippet[:3000]
+        if len(resume_snippet) > 1200:
+            resume_snippet = resume_snippet[:1200]
 
         # Single-call mode: assume candidate_jobs are already pre-filtered/ranked heuristically.
         # Do one final rerank + structured summary over the provided candidate list.

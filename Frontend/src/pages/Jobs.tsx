@@ -6,8 +6,10 @@ import {
   ensureRecommendations,
   getLatestRecommendations,
   listMyResumes,
+  tailorResumeForJob,
   type RecommendationJob,
   type RecommendationsResponse,
+  type TailorResumeResponse,
 } from '../lib/api'
 import './Dashboard.css'
 
@@ -50,6 +52,10 @@ export default function Jobs() {
   const [recSnapshotId, setRecSnapshotId] = useState<string | null>(null)
   const [recUpdatedAt, setRecUpdatedAt] = useState<string | null>(null)
   const [recRefreshToken, setRecRefreshToken] = useState(0)
+  const [tailoringByUid, setTailoringByUid] = useState<Record<string, boolean>>({})
+  const [tailoredResumeByUid, setTailoredResumeByUid] = useState<Record<string, TailorResumeResponse>>({})
+  const [tailoringErrorByUid, setTailoringErrorByUid] = useState<Record<string, string>>({})
+  const [copiedUid, setCopiedUid] = useState<string | null>(null)
 
   const [search, setSearch] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -299,7 +305,43 @@ export default function Jobs() {
     }
   }, [activeTab, recRefreshToken])
 
+  async function handleTailorResume(job: RecommendationJob) {
+    if (!recResumeId) {
+      setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: 'Upload a resume before tailoring.' }))
+      return
+    }
+
+    setTailoringByUid((previous) => ({ ...previous, [job.uid]: true }))
+    setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: '' }))
+
+    try {
+      const value = await tailorResumeForJob({ job_uid: job.uid, resume_id: recResumeId })
+      setTailoredResumeByUid((previous) => ({ ...previous, [job.uid]: value }))
+    } catch (errorValue) {
+      const message = errorValue instanceof Error ? errorValue.message : 'Failed to tailor resume.'
+      setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: message }))
+    } finally {
+      setTailoringByUid((previous) => ({ ...previous, [job.uid]: false }))
+    }
+  }
+
+  async function handleCopyTailoredResume(jobUid: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedUid(jobUid)
+      window.setTimeout(() => {
+        setCopiedUid((current) => (current === jobUid ? null : current))
+      }, 1500)
+    } catch {
+      setTailoringErrorByUid((previous) => ({ ...previous, [jobUid]: 'Failed to copy tailored resume.' }))
+    }
+  }
+
   function renderRecommendationJob(job: RecommendationJob) {
+    const tailored = tailoredResumeByUid[job.uid]
+    const tailoring = tailoringByUid[job.uid] || false
+    const tailoringError = tailoringErrorByUid[job.uid]
+
     return (
       <div key={job.uid} className="ih-card" style={{ marginBottom: 14 }}>
         <div className="ih-cardBody">
@@ -309,11 +351,71 @@ export default function Jobs() {
           </div>
           {job.reason ? <div className="ih-muted">{job.reason}</div> : null}
 
-          {job.url ? (
-            <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="ih-btnPrimary" type="button" disabled={tailoring} onClick={() => void handleTailorResume(job)}>
+              {tailoring ? 'Tailoring...' : 'Tailor Resume to JD'}
+            </button>
+            {job.url ? (
               <a className="ih-btnGhost" href={job.url} target="_blank" rel="noreferrer">
                 Apply
               </a>
+            ) : null}
+          </div>
+
+          {tailoringError ? <div className="ih-error" style={{ marginTop: 12 }}>{tailoringError}</div> : null}
+
+          {tailored ? (
+            <div
+              style={{
+                marginTop: 14,
+                border: '1px solid #d1d5db',
+                borderRadius: 10,
+                padding: 14,
+                background: '#fafafa',
+                display: 'grid',
+                gap: 12,
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>Tailored Resume Draft</div>
+              <div className="ih-muted">{tailored.summary}</div>
+
+              {tailored.keywords_to_highlight.length ? (
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Keywords to highlight</div>
+                  <div className="ih-muted">{tailored.keywords_to_highlight.join(', ')}</div>
+                </div>
+              ) : null}
+
+              {tailored.targeted_edits.length ? (
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Targeted edits</div>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {tailored.targeted_edits.map((item) => (
+                      <li key={item} className="ih-muted" style={{ marginBottom: 4 }}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Draft</div>
+                <textarea
+                  className="ih-input"
+                  value={tailored.tailored_resume}
+                  readOnly
+                  style={{ minHeight: 260, width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+                />
+              </div>
+
+              <div>
+                <button
+                  className="ih-btnGhost"
+                  type="button"
+                  onClick={() => void handleCopyTailoredResume(job.uid, tailored.tailored_resume)}
+                >
+                  {copiedUid === job.uid ? 'Copied' : 'Copy Draft'}
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

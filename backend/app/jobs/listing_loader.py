@@ -113,3 +113,12 @@ def list_visible_jobs(*, limit: int = 5000) -> list[NormalizedJob]:
         _cached_mtime = mtime
         _cached_visible_jobs = normalized
         return normalized[:limit]
+
+
+def get_visible_job_by_uid(uid: str) -> NormalizedJob | None:
+    if not uid:
+        return None
+    for job in list_visible_jobs(limit=5000):
+        if job.uid == uid:
+            return job
+    return None

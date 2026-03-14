@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import httpx
 from pydantic import BaseModel, Field
 
 from app.ai.factory import get_ai_provider
@@ -24,7 +27,7 @@ from app.db.local_store import (
 )
 from app.db.mongo import get_database
 from app.utils.time import now_eastern
-from app.jobs.listing_loader import list_visible_jobs
+from app.jobs.listing_loader import get_visible_job_by_uid, list_visible_jobs
 from app.core.config import settings
 from app.schemas.profile import UserProfile
 from app.services.recommendations import profile_summary, score_jobs_for_user
@@ -71,6 +74,65 @@ class RecommendationsSnapshotStatus(BaseModel):
     updated_at: datetime | None = None
     data: GenerateRecommendationsResponse | None = None
     error: str | None = None
+
+
+class TailorResumeRequest(BaseModel):
+    job_uid: str = Field(min_length=1)
+    resume_id: str | None = Field(default=None)
+
+
+class TailorResumeResponse(BaseModel):
+    job_uid: str
+    resume_id: str
+    summary: str
+    tailored_resume: str
+    targeted_edits: list[str] = Field(default_factory=list)
+    keywords_to_highlight: list[str] = Field(default_factory=list)
+
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _fallback_job_description_text(*, title: str, company: str | None, category: str | None, location: str | None, sponsorship: str | None) -> str:
+    pieces = [
+        f"Title: {title}",
+        f"Company: {company or 'Unknown company'}",
+        f"Category: {category or 'Unknown category'}",
+        f"Location: {location or 'Unknown location'}",
+        f"Sponsorship: {sponsorship or 'Unknown'}",
+    ]
+    return "\n".join(pieces)
+
+
+def _html_to_text(value: str) -> str:
+    cleaned = re.sub(r"(?is)<(script|style|noscript).*?>.*?</\1>", " ", value)
+    cleaned = _HTML_TAG_RE.sub(" ", cleaned)
+    cleaned = html.unescape(cleaned)
+    cleaned = _WHITESPACE_RE.sub(" ", cleaned).strip()
+    return cleaned
+
+
+async def _fetch_job_description_text(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        headers = {"User-Agent": "InternHunter/1.0 (+resume-tailoring)"}
+        timeout = httpx.Timeout(12.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers=headers) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+
+        content_type = (response.headers.get("content-type") or "").lower()
+        if "html" not in content_type and "text" not in content_type:
+            return None
+
+        text = _html_to_text(response.text)
+        if len(text) < 200:
+            return None
+        return text[:5000]
+    except Exception:
+        return None
 
 
 async def _compute_recommendations(payload: GenerateRecommendationsRequest, user_email: str) -> GenerateRecommendationsResponse:
@@ -532,4 +594,54 @@ async def latest_recommendations(
         updated_at=updated_at if isinstance(updated_at, datetime) else None,
         data=data,
         error=str(latest.get("error") or "") or None,
+    )
+
+
+@router.post("/tailor-resume", response_model=TailorResumeResponse)
+async def tailor_resume_for_job(
+    payload: TailorResumeRequest,
+    user_email: str = Depends(get_current_user_email),
+) -> TailorResumeResponse:
+    resolved_resume_id = payload.resume_id or await _get_latest_resume_id_for_user(user_email)
+    if not resolved_resume_id:
+        raise HTTPException(status_code=404, detail="No resume found")
+
+    resume_doc = await _get_resume_doc_for_user(resolved_resume_id, user_email)
+    if not isinstance(resume_doc, dict):
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    extracted_text = resume_doc.get("extracted_text")
+    if not isinstance(extracted_text, str) or not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="Resume text is not available for tailoring")
+
+    job = get_visible_job_by_uid(payload.job_uid)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Recommended job not found")
+
+    fetched_job_description = await _fetch_job_description_text(job.url)
+    job_description = fetched_job_description or _fallback_job_description_text(
+        title=job.title or "Untitled role",
+        company=job.company,
+        category=job.category,
+        location=job.location,
+        sponsorship=job.sponsorship,
+    )
+
+    profile = await _get_profile_for_user(user_email)
+    provider = get_ai_provider()
+    tailored = await provider.tailor_resume_for_job(
+        user_profile=profile_summary(profile),
+        resume_text=extracted_text.strip()[:5000],
+        job_title=job.title or "Untitled role",
+        job_company=job.company,
+        job_description=job_description,
+    )
+
+    return TailorResumeResponse(
+        job_uid=job.uid,
+        resume_id=str(resolved_resume_id),
+        summary=tailored.summary,
+        tailored_resume=tailored.tailored_resume,
+        targeted_edits=list(tailored.targeted_edits),
+        keywords_to_highlight=list(tailored.keywords_to_highlight),
     )

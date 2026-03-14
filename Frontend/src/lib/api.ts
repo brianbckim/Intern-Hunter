@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
     generate: '/api/recommendations/generate',
     ensure: '/api/recommendations/ensure',
     latest: '/api/recommendations/latest',
+    tailorResume: '/api/recommendations/tailor-resume',
   },
 }
 
@@ -152,6 +153,20 @@ export type RecommendationsSnapshotResponse = {
   error: string | null
 }
 
+export type TailorResumeRequest = {
+  job_uid: string
+  resume_id?: string | null
+}
+
+export type TailorResumeResponse = {
+  job_uid: string
+  resume_id: string
+  summary: string
+  tailored_resume: string
+  targeted_edits: string[]
+  keywords_to_highlight: string[]
+}
+
 export type GenerateRecommendationsRequest = {
   limit?: number
   candidate_pool?: number
@@ -182,6 +197,14 @@ export async function ensureRecommendations(
 export async function getLatestRecommendations(resumeId?: string | null): Promise<RecommendationsSnapshotResponse> {
   const url = resumeId ? `${API_ENDPOINTS.recommendations.latest}?resume_id=${encodeURIComponent(resumeId)}` : API_ENDPOINTS.recommendations.latest
   return apiJson<RecommendationsSnapshotResponse>(url)
+}
+
+export async function tailorResumeForJob(payload: TailorResumeRequest): Promise<TailorResumeResponse> {
+  return apiJson<TailorResumeResponse>(API_ENDPOINTS.recommendations.tailorResume, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
 }
 
 export type RecruiterItem = {

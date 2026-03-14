@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import html
+import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import httpx
 from pydantic import BaseModel, Field
 
 from app.ai.factory import get_ai_provider
@@ -17,11 +22,12 @@ from app.db.local_store import get_resume_by_id_for_user as get_local_resume_by_
 from app.db.local_store import (
     create_recommendations_snapshot as create_local_recommendations_snapshot,
     get_latest_recommendations_snapshot_for_user as get_local_latest_recommendations_snapshot_for_user,
+    list_recommendations_snapshots_by_user,
     update_recommendations_snapshot_by_id_for_user as update_local_recommendations_snapshot_by_id_for_user,
 )
 from app.db.mongo import get_database
 from app.utils.time import now_eastern
-from app.jobs.listing_loader import list_visible_jobs
+from app.jobs.listing_loader import get_visible_job_by_uid, list_visible_jobs
 from app.core.config import settings
 from app.schemas.profile import UserProfile
 from app.services.recommendations import profile_summary, score_jobs_for_user
@@ -70,6 +76,65 @@ class RecommendationsSnapshotStatus(BaseModel):
     error: str | None = None
 
 
+class TailorResumeRequest(BaseModel):
+    job_uid: str = Field(min_length=1)
+    resume_id: str | None = Field(default=None)
+
+
+class TailorResumeResponse(BaseModel):
+    job_uid: str
+    resume_id: str
+    summary: str
+    tailored_resume: str
+    targeted_edits: list[str] = Field(default_factory=list)
+    keywords_to_highlight: list[str] = Field(default_factory=list)
+
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _fallback_job_description_text(*, title: str, company: str | None, category: str | None, location: str | None, sponsorship: str | None) -> str:
+    pieces = [
+        f"Title: {title}",
+        f"Company: {company or 'Unknown company'}",
+        f"Category: {category or 'Unknown category'}",
+        f"Location: {location or 'Unknown location'}",
+        f"Sponsorship: {sponsorship or 'Unknown'}",
+    ]
+    return "\n".join(pieces)
+
+
+def _html_to_text(value: str) -> str:
+    cleaned = re.sub(r"(?is)<(script|style|noscript).*?>.*?</\1>", " ", value)
+    cleaned = _HTML_TAG_RE.sub(" ", cleaned)
+    cleaned = html.unescape(cleaned)
+    cleaned = _WHITESPACE_RE.sub(" ", cleaned).strip()
+    return cleaned
+
+
+async def _fetch_job_description_text(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        headers = {"User-Agent": "InternHunter/1.0 (+resume-tailoring)"}
+        timeout = httpx.Timeout(12.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers=headers) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+
+        content_type = (response.headers.get("content-type") or "").lower()
+        if "html" not in content_type and "text" not in content_type:
+            return None
+
+        text = _html_to_text(response.text)
+        if len(text) < 200:
+            return None
+        return text[:5000]
+    except Exception:
+        return None
+
+
 async def _compute_recommendations(payload: GenerateRecommendationsRequest, user_email: str) -> GenerateRecommendationsResponse:
     if payload.candidate_pool < payload.limit:
         raise HTTPException(status_code=400, detail="candidate_pool must be >= limit")
@@ -88,7 +153,7 @@ async def _compute_recommendations(payload: GenerateRecommendationsRequest, user
             if isinstance(doc, dict):
                 extracted = doc.get("extracted_text")
                 if isinstance(extracted, str) and extracted.strip():
-                    resume_text = extracted.strip()[:12000]
+                    resume_text = extracted.strip()[:4000]
 
     scored = score_jobs_for_user(
         jobs,
@@ -113,11 +178,10 @@ async def _compute_recommendations(payload: GenerateRecommendationsRequest, user
                     {
                         "uid": c.job.uid,
                         "title": c.job.title or "",
-                        "company": c.job.company or "",
                         "location": c.job.location or "",
                         "category": c.job.category or "",
-                        "url": c.job.url or "",
-                        "sponsorship": c.job.sponsorship or "",
+                        "score": round(c.score, 3),
+                        "matched_keywords": ", ".join(c.matched_keywords[:4]),
                     }
                     for c in candidates
                 ],
@@ -187,6 +251,7 @@ async def _save_snapshot_pending(
     *,
     user_email: str,
     resume_id: str,
+    request_key: str,
     payload: GenerateRecommendationsRequest,
 ) -> tuple[str, datetime]:
     now = now_eastern()
@@ -195,6 +260,7 @@ async def _save_snapshot_pending(
     doc = {
         "user_email": user_email,
         "resume_id": resume_id,
+        "request_key": request_key,
         "status": "pending",
         "request": payload.model_dump(),
         "result": None,
@@ -242,6 +308,15 @@ def _snapshot_day_key(latest: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _snapshot_request_key(latest: dict[str, Any] | None) -> str | None:
+    if not isinstance(latest, dict):
+        return None
+    value = latest.get("request_key")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 async def _load_latest_snapshot(*, user_email: str, resume_id: str) -> dict[str, Any] | None:
     db = get_database()
     if db is None:
@@ -252,6 +327,49 @@ async def _load_latest_snapshot(*, user_email: str, resume_id: str) -> dict[str,
         {"user_email": user_email, "resume_id": resume_id},
         sort=[("created_at", -1)],
     )
+
+
+async def _load_latest_matching_snapshot(*, user_email: str, resume_id: str, request_key: str) -> dict[str, Any] | None:
+    db = get_database()
+    if db is None:
+        rows = list_recommendations_snapshots_by_user(user_email, limit=50)
+        for item in rows:
+            if str(item.get("resume_id")) == str(resume_id) and str(item.get("request_key") or "") == request_key:
+                return item
+        return None
+
+    coll = recommendations_snapshots_collection(db)
+    return await coll.find_one(
+        {"user_email": user_email, "resume_id": resume_id, "request_key": request_key},
+        sort=[("created_at", -1)],
+    )
+
+
+def _build_request_key(*, payload: GenerateRecommendationsRequest, profile: UserProfile, resume_id: str, resume_text: str | None) -> str:
+    request_doc = {
+        "resume_id": resume_id,
+        "limit": int(payload.limit),
+        "candidate_pool": int(payload.candidate_pool),
+        "use_ai": bool(payload.use_ai),
+        "ai_provider": (settings.AI_PROVIDER or "mock").strip().lower(),
+        "ai_model": (settings.OLLAMA_MODEL or "").strip(),
+        "profile_summary": profile_summary(profile),
+        "resume_excerpt": (resume_text or "")[:1500],
+    }
+    encoded = json.dumps(request_doc, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+async def _load_resume_text_for_user(resume_id: str | None, user_email: str) -> str | None:
+    if not resume_id:
+        return None
+    doc = await _get_resume_doc_for_user(resume_id, user_email)
+    if not isinstance(doc, dict):
+        return None
+    extracted = doc.get("extracted_text")
+    if isinstance(extracted, str) and extracted.strip():
+        return extracted.strip()[:4000]
+    return None
 
 
 async def _update_snapshot(
@@ -375,7 +493,11 @@ async def ensure_recommendations(
     if not resume_id:
         return RecommendationsSnapshotStatus(status="missing", snapshot_id=None, resume_id=None)
 
-    latest = await _load_latest_snapshot(user_email=user_email, resume_id=resume_id)
+    profile = await _get_profile_for_user(user_email)
+    resume_text = await _load_resume_text_for_user(resume_id, user_email)
+    request_key = _build_request_key(payload=payload, profile=profile, resume_id=resume_id, resume_text=resume_text)
+
+    latest = await _load_latest_matching_snapshot(user_email=user_email, resume_id=resume_id, request_key=request_key)
     if isinstance(latest, dict):
         status = str(latest.get("status") or "")
         current_day_key = now_eastern().date().isoformat()
@@ -388,7 +510,7 @@ async def ensure_recommendations(
             # Retry automatically when the day changes.
             latest = None
 
-        if isinstance(latest, dict) and status in {"pending", "ready", "error"}:
+        if isinstance(latest, dict) and _snapshot_request_key(latest) == request_key and status in {"pending", "ready", "error"}:
             data = None
             if status == "ready" and isinstance(latest.get("result"), dict):
                 data = GenerateRecommendationsResponse(**latest["result"])
@@ -416,7 +538,12 @@ async def ensure_recommendations(
                 error=str(latest.get("error") or "") or None,
             )
 
-    snapshot_id, now = await _save_snapshot_pending(user_email=user_email, resume_id=resume_id, payload=payload)
+    snapshot_id, now = await _save_snapshot_pending(
+        user_email=user_email,
+        resume_id=resume_id,
+        request_key=request_key,
+        payload=payload,
+    )
     background_tasks.add_task(_run_snapshot_job, snapshot_id=snapshot_id, user_email=user_email, payload=payload)
     return RecommendationsSnapshotStatus(
         status="pending",
@@ -467,4 +594,54 @@ async def latest_recommendations(
         updated_at=updated_at if isinstance(updated_at, datetime) else None,
         data=data,
         error=str(latest.get("error") or "") or None,
+    )
+
+
+@router.post("/tailor-resume", response_model=TailorResumeResponse)
+async def tailor_resume_for_job(
+    payload: TailorResumeRequest,
+    user_email: str = Depends(get_current_user_email),
+) -> TailorResumeResponse:
+    resolved_resume_id = payload.resume_id or await _get_latest_resume_id_for_user(user_email)
+    if not resolved_resume_id:
+        raise HTTPException(status_code=404, detail="No resume found")
+
+    resume_doc = await _get_resume_doc_for_user(resolved_resume_id, user_email)
+    if not isinstance(resume_doc, dict):
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    extracted_text = resume_doc.get("extracted_text")
+    if not isinstance(extracted_text, str) or not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="Resume text is not available for tailoring")
+
+    job = get_visible_job_by_uid(payload.job_uid)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Recommended job not found")
+
+    fetched_job_description = await _fetch_job_description_text(job.url)
+    job_description = fetched_job_description or _fallback_job_description_text(
+        title=job.title or "Untitled role",
+        company=job.company,
+        category=job.category,
+        location=job.location,
+        sponsorship=job.sponsorship,
+    )
+
+    profile = await _get_profile_for_user(user_email)
+    provider = get_ai_provider()
+    tailored = await provider.tailor_resume_for_job(
+        user_profile=profile_summary(profile),
+        resume_text=extracted_text.strip()[:5000],
+        job_title=job.title or "Untitled role",
+        job_company=job.company,
+        job_description=job_description,
+    )
+
+    return TailorResumeResponse(
+        job_uid=job.uid,
+        resume_id=str(resolved_resume_id),
+        summary=tailored.summary,
+        tailored_resume=tailored.tailored_resume,
+        targeted_edits=list(tailored.targeted_edits),
+        keywords_to_highlight=list(tailored.keywords_to_highlight),
     )

@@ -239,21 +239,17 @@ export default function ResumePage() {
       setResumeId(response.resume_id)
       setSuccess('Resume uploaded successfully.')
 
-      // Generate a fresh AI feedback snapshot once, in the background.
-      // After feedback completes, precompute AI job recommendations for /jobs?tab=ai.
+      // Start feedback and recommendations in parallel after upload.
       void (async () => {
-        try {
-          await generateResumeFeedback(response.resume_id)
-
-          await ensureRecommendations({
+        const feedbackPromise = generateResumeFeedback(response.resume_id)
+        const recommendationsPromise = ensureRecommendations({
             limit: 20,
             candidate_pool: 40,
             use_ai: true,
             resume_id: response.resume_id,
           })
-        } catch {
-          // best-effort background precompute
-        }
+
+        await Promise.allSettled([feedbackPromise, recommendationsPromise])
       })()
     } catch (errorValue) {
       setError(friendlyErrorMessage(errorValue))

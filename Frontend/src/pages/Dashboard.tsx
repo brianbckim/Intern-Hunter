@@ -161,18 +161,16 @@ export default function Dashboard() {
             await refreshResumes()
 
             void (async () => {
-                try {
-                    await generateResumeFeedback(uploaded.resume_id)
-                    await refreshFeedback()
-
-                    await ensureRecommendations({
+                const feedbackPromise = generateResumeFeedback(uploaded.resume_id)
+                    .then(() => refreshFeedback())
+                const recommendationsPromise = ensureRecommendations({
                         limit: 20,
-                                            candidate_pool: 40,
+                        candidate_pool: 40,
                         use_ai: true,
                         resume_id: uploaded.resume_id,
                     })
-                } catch {
-                }
+
+                await Promise.allSettled([feedbackPromise, recommendationsPromise])
             })()
         } catch (e) {
             setResumeError(friendlyResumeError(e))

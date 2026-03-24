@@ -6,7 +6,7 @@
   --button-text: #ffffff;
 }
 
-:root[data-theme="dark"] {
+html[data-theme="dark"] {
   --bg-color: #121212;
   --text-color: #ffffff;
   --card-bg: rgba(40, 40, 40, 0.9);
@@ -28,37 +28,18 @@ html, body {
 
 .app {
   min-height: 100vh;
-  width: 100%;
-
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
+  align-items: center;
 }
 
-.settings-menu {
+.ih-card {
   background: var(--card-bg);
+  color: var(--text-color);
   padding: 20px;
   border-radius: 10px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-  margin-bottom: 20px;
   text-align: center;
-}
-
-.settings-menu h2 {
-  margin-bottom: 10px;
-}
-
-.settings-menu input[type="color"] {
-  margin: 10px 0;
-  width: 60px;
-  height: 40px;
-  border: none;
-  cursor: pointer;
-}
-
-.preset-buttons {
-  margin-top: 10px;
 }
 
 .preset-buttons button {
@@ -73,8 +54,4 @@ html, body {
 
 .preset-buttons button:hover {
   opacity: 0.8;
-}
-
-.content {
-  text-align: center;
 }

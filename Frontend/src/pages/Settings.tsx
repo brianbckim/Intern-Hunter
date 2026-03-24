@@ -21,32 +21,14 @@ export default function Settings() {
   return (
     <div className="app">
       <AppLayout pageLabel="Settings" activeNav="settings">
-        <div className="ih-grid">
-          <section className="ih-card" style={{ background: "var(--card-bg)", color: "var(--text-color)" }}>
-            <div className="ih-cardHeader">
-              <div className="ih-cardTitle">Settings</div>
-            </div>
+        <div className="ih-card">
+          <h2>Settings</h2>
 
-            <div className="ih-cardBody">
-              <div className="ih-settingRow">
-                <div>
-                  <div className="ih-settingLabel">Theme</div>
-                  <div className="ih-muted">
-                    Switch between light and dark mode.
-                  </div>
-                </div>
+          <p>Switch between light and dark mode.</p>
 
-                <button
-                  className="ih-themeToggle"
-                  onClick={toggleTheme}
-                >
-                  {theme === "light"
-                    ? "Enable Dark Mode"
-                    : "Enable Light Mode"}
-                </button>
-              </div>
-            </div>
-          </section>
+          <button onClick={toggleTheme}>
+            {theme === "light" ? "Enable Dark Mode" : "Enable Light Mode"}
+          </button>
         </div>
       </AppLayout>
     </div>

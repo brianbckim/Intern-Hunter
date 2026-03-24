@@ -5,29 +5,24 @@ import "./Dashboard.css"
 type Theme = "light" | "dark"
 
 export default function Settings() {
-  const [theme, setTheme] = useState<Theme>("light")
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem("theme") as Theme) || "light"
+  })
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as Theme | null
-    if (savedTheme) {
-      setTheme(savedTheme)
-      document.documentElement.setAttribute("data-theme", savedTheme)
-    }
-  }, [])
+    document.documentElement.setAttribute("data-theme", theme)
+    localStorage.setItem("theme", theme)
+  }, [theme])
 
   const toggleTheme = () => {
-    const newTheme: Theme = theme === "light" ? "dark" : "light"
-
-    setTheme(newTheme)
-    document.documentElement.setAttribute("data-theme", newTheme)
-    localStorage.setItem("theme", newTheme)
+    setTheme(prev => (prev === "light" ? "dark" : "light"))
   }
 
   return (
     <div className="app">
       <AppLayout pageLabel="Settings" activeNav="settings">
         <div className="ih-grid">
-          <section className="ih-card">
+          <section className="ih-card" style={{ background: "var(--card-bg)", color: "var(--text-color)" }}>
             <div className="ih-cardHeader">
               <div className="ih-cardTitle">Settings</div>
             </div>
@@ -45,7 +40,9 @@ export default function Settings() {
                   className="ih-themeToggle"
                   onClick={toggleTheme}
                 >
-                  {theme === "light" ? "Enable Dark Mode" : "Enable Light Mode"}
+                  {theme === "light"
+                    ? "Enable Dark Mode"
+                    : "Enable Light Mode"}
                 </button>
               </div>
             </div>

@@ -6,7 +6,7 @@
   --button-text: #ffffff;
 }
 
-body.darkTheme{
+.darkTheme{
   --bg-color: #121212;
   --text-color: #ffffff;
   --card-bg: rgba(40, 40, 40, 0.9);

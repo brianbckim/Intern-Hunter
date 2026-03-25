@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import AppLayout from "../components/AppLayout"
-import "./Dashboard.css"
+import "./Settings.css"
 
 type Theme = "light" | "dark"
 
@@ -10,7 +10,14 @@ export default function Settings() {
   })
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme)
+    const root = document.documentElement
+
+    if (theme === "dark") {
+      root.classList.add("darkTheme")
+    } else {
+      root.classList.remove("darkTheme")
+    }
+
     localStorage.setItem("theme", theme)
   }, [theme])
 
@@ -31,6 +38,9 @@ export default function Settings() {
           </button>
         </div>
       </AppLayout>
+      <button id="mode-swap" onClick={toggleTheme}>
+        {theme === "light" ? "Dark" : "Light"}
+      </button>
     </div>
   )
 }

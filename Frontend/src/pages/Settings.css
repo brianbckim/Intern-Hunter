@@ -6,7 +6,7 @@
   --button-text: #ffffff;
 }
 
-html[data-theme="dark"] {
+.darkTheme{
   --bg-color: #121212;
   --text-color: #ffffff;
   --card-bg: rgba(40, 40, 40, 0.9);
@@ -14,7 +14,7 @@ html[data-theme="dark"] {
   --button-text: #ffffff;
 }
 
-html, body {
+body{
   margin: 0;
   height: 100%;
   background-color: var(--bg-color);
@@ -54,4 +54,20 @@ html, body {
 
 .preset-buttons button:hover {
   opacity: 0.8;
+}
+
+#mode-swap{
+  height: auto;
+  width: auto;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background-color: var(--button-bg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  color: var(--button-text);
+  cursor: pointer;
 }

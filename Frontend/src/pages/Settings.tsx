@@ -38,9 +38,6 @@ export default function Settings() {
           </button>
         </div>
       </AppLayout>
-      <button id="mode-swap" onClick={toggleTheme}>
-        {theme === "light" ? "Dark" : "Light"}
-      </button>
     </div>
   )
 }

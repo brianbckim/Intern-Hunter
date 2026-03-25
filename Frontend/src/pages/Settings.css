@@ -6,7 +6,7 @@
   --button-text: #ffffff;
 }
 
-.darkTheme{
+body.darkTheme{
   --bg-color: #121212;
   --text-color: #ffffff;
   --card-bg: rgba(40, 40, 40, 0.9);
@@ -14,9 +14,12 @@
   --button-text: #ffffff;
 }
 
-body{
+html, body {
   margin: 0;
-  height: 100%;
+  min-height: 100vh;
+}
+
+body{
   background-color: var(--bg-color);
   color: var(--text-color);
   font-family: Arial, sans-serif;
@@ -56,15 +59,10 @@ body{
   opacity: 0.8;
 }
 
-#mode-swap{
-  height: auto;
-  width: auto;
+#mode-swap {
   padding: 10px 16px;
   border-radius: 8px;
   background-color: var(--button-bg);
-  display: flex;
-  justify-content: center;
-  align-items: center;
   position: fixed;
   top: 20px;
   right: 20px;

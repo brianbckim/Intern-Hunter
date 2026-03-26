@@ -1,71 +1,114 @@
-:root {
-  --bg-color: #ffffff;
-  --text-color: #000000;
-  --card-bg: rgba(255, 255, 255, 0.9);
-  --button-bg: #444;
-  --button-text: #ffffff;
+.settings-cardBody {
+  display: grid;
+  gap: 20px;
 }
 
-.darkTheme{
-  --bg-color: #121212;
-  --text-color: #ffffff;
-  --card-bg: rgba(40, 40, 40, 0.9);
-  --button-bg: #666;
-  --button-text: #ffffff;
-}
-
-html, body {
-  margin: 0;
-  min-height: 100vh;
-}
-
-body{
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  font-family: Arial, sans-serif;
-}
-
-* {
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-.app {
-  min-height: 100vh;
+.settings-row {
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
-.ih-card {
-  background: var(--card-bg);
-  color: var(--text-color);
+.settings-label {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.settings-copy {
+  margin: 8px 0 0;
+  max-width: 720px;
+}
+
+.settings-toggle {
+  min-width: 240px;
+}
+
+.settings-themeStatus {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-preview {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-muted);
   padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-  text-align: center;
+  display: grid;
+  gap: 18px;
 }
 
-.preset-buttons button {
-  margin: 5px;
+.settings-previewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-previewTitle {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.settings-previewActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   padding: 8px 12px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  background-color: var(--button-bg);
-  color: var(--button-text);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.preset-buttons button:hover {
-  opacity: 0.8;
+.settings-chipPrimary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-contrast);
 }
 
-#mode-swap {
-  padding: 10px 16px;
-  border-radius: 8px;
-  background-color: var(--button-bg);
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  color: var(--button-text);
-  cursor: pointer;
+.settings-previewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.settings-previewPanel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 18px;
+}
+
+.settings-previewMetric {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.settings-previewValue {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .settings-toggle {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settings-previewGrid {
+    grid-template-columns: 1fr;
+  }
 }

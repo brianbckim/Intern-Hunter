@@ -87,7 +87,6 @@ export default function Profile() {
       setSkillInput('')
       return
     }
-
     updateField('skills', [...form.skills, value])
     setSkillInput('')
   }
@@ -136,86 +135,139 @@ export default function Profile() {
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Profile Form</div>
+            <div className="ih-cardTitle">Your Profile</div>
+            <p className="ih-muted">Keep your info up to date for better internship matches.</p>
           </div>
+
           <div className="ih-cardBody">
-            {loading ? <p className="ih-muted">Loading profile...</p> : null}
-            {error ? <p className="ih-error">{error}</p> : null}
-            {success ? <p className="ih-success">{success}</p> : null}
+            {loading ? <p className="ih-muted">Loading profile…</p> : null}
+
+            {error ? (
+              <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+                {error}
+              </div>
+            ) : null}
+
+            {success ? (
+              <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300">
+                {success}
+              </div>
+            ) : null}
 
             {!loading ? (
-              <div className="ih-formGrid">
-                <label>
-                  <span>Name</span>
-                  <input className="ih-input" value={form.name} onChange={(event) => updateField('name', event.target.value)} />
-                </label>
-
-                <label>
-                  <span>Major / Program</span>
+              <div className="mt-2 grid max-w-2xl gap-5">
+                {/* Name */}
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-semibold">Name</span>
                   <input
                     className="ih-input"
+                    placeholder="e.g. Jane Doe"
+                    value={form.name}
+                    onChange={(e) => updateField('name', e.target.value)}
+                  />
+                </label>
+
+                {/* Major / Program */}
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-semibold">Major / Program</span>
+                  <input
+                    className="ih-input"
+                    placeholder="e.g. Computer Science"
                     value={form.major_or_program}
-                    onChange={(event) => updateField('major_or_program', event.target.value)}
+                    onChange={(e) => updateField('major_or_program', e.target.value)}
                   />
                 </label>
 
-                <label>
-                  <span>Career Interests</span>
+                {/* Career Interests */}
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-semibold">Career Interests</span>
                   <input
                     className="ih-input"
+                    placeholder="e.g. Full-stack development, Machine learning"
                     value={form.career_interests}
-                    onChange={(event) => updateField('career_interests', event.target.value)}
+                    onChange={(e) => updateField('career_interests', e.target.value)}
                   />
                 </label>
 
-                <div>
-                  <span>Skills (tags/list)</span>
-                  <div className="ih-skillInputRow">
+                {/* Skills — chip / tag system */}
+                <div className="grid gap-1.5">
+                  <span className="text-sm font-semibold">Skills</span>
+
+                  <div className="flex gap-2">
                     <input
                       className="ih-input"
+                      placeholder="Type a skill and press Enter"
                       value={skillInput}
-                      onChange={(event) => setSkillInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
+                      onChange={(e) => setSkillInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
                           addSkill()
                         }
                       }}
-                      placeholder="Add a skill and press Enter"
                     />
-                    <button type="button" className="ih-btnGhost" onClick={addSkill}>
+                    <button type="button" className="ih-btnGhost shrink-0" onClick={addSkill}>
                       Add
                     </button>
                   </div>
 
-                  <div className="ih-skillTags">
-                    {form.skills.map((skill) => (
-                      <span key={skill} className="ih-skillTag">
-                        {skill}
-                        <button type="button" onClick={() => removeSkill(skill)}>
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                  {form.skills.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {form.skills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium"
+                          style={{
+                            background: 'var(--pill-bg)',
+                            borderColor: 'var(--pill-border)',
+                            color: 'var(--pill-text)',
+                          }}
+                        >
+                          {skill}
+                          <button
+                            type="button"
+                            className="ml-0.5 cursor-pointer text-base leading-none opacity-60 hover:opacity-100"
+                            style={{ background: 'none', border: 'none', color: 'inherit', padding: 0 }}
+                            onClick={() => removeSkill(skill)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="ih-muted mt-1">No skills added yet.</p>
+                  )}
                 </div>
 
-                <label>
-                  <span>Graduation Year</span>
+                {/* Graduation Year */}
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-semibold">Graduation Year</span>
                   <input
                     className="ih-input"
                     type="number"
+                    placeholder="e.g. 2028"
                     value={form.graduation_year}
-                    onChange={(event) => updateField('graduation_year', event.target.value)}
-                    placeholder="2028"
+                    onChange={(e) => updateField('graduation_year', e.target.value)}
                   />
                 </label>
 
-                <div className="ih-actions">
-                  <button className="ih-btnPrimary" type="button" disabled={!isDirty || saving} onClick={() => void handleSave()}>
-                    {saving ? 'Saving...' : 'Save'}
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    className="ih-btnPrimary"
+                    type="button"
+                    disabled={!isDirty || saving}
+                    onClick={() => void handleSave()}
+                  >
+                    {saving ? 'Saving…' : 'Save Changes'}
                   </button>
-                  <button className="ih-btnGhost" type="button" disabled={!isDirty || saving} onClick={handleCancel}>
+                  <button
+                    className="ih-btnGhost"
+                    type="button"
+                    disabled={!isDirty || saving}
+                    onClick={handleCancel}
+                  >
                     Cancel
                   </button>
                 </div>

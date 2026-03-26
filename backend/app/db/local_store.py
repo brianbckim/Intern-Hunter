@@ -133,6 +133,38 @@ def create_user(doc: dict[str, Any]) -> None:
         _write_store(store)
 
 
+def delete_user_by_email(email: str) -> bool:
+    normalized = email.strip().lower()
+    with _lock:
+        store = _read_store()
+        users = store["users"]
+        found = False
+        store["users"] = [
+            u for u in users
+            if str(u.get("email", "")).lower() != normalized or not (found := True)
+        ]
+        if not found:
+            return False
+        store["profiles"] = {
+            k: v for k, v in store.get("profiles", {}).items()
+            if k.lower() != normalized
+        }
+        store["resumes"] = [
+            r for r in store.get("resumes", [])
+            if str(r.get("user_email", "")).lower() != normalized
+        ]
+        store["resume_feedback"] = [
+            f for f in store.get("resume_feedback", [])
+            if str(f.get("user_email", "")).lower() != normalized
+        ]
+        store["recommendations_snapshots"] = [
+            s for s in store.get("recommendations_snapshots", [])
+            if str(s.get("user_email", "")).lower() != normalized
+        ]
+        _write_store(store)
+        return True
+
+
 def get_profile(user_email: str) -> dict[str, Any] | None:
     with _lock:
         store = _read_store()

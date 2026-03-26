@@ -88,6 +88,13 @@ export async function register(
   })
 }
 
+export async function deleteAccount(): Promise<void> {
+  const res = await apiFetch('/api/auth/account', { method: 'DELETE' })
+  if (!res.ok) {
+    throw new ApiError(res.status, await readErrorMessage(res))
+  }
+}
+
 export type UserProfile = {
   user_email: string
   name: string | null

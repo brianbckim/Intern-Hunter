@@ -74,13 +74,14 @@
 .auth-subtitle {
   margin: 4px 0 0 0;
   font-size: 1.2rem;
-  color: #6b7280;
+  color: #4b5563;
 }
 
 .auth-field {
   display: grid;
   gap: 10px;
   font-size: 1.15rem;
+  color: #111827;
 }
 
 .auth-field input {
@@ -103,6 +104,10 @@
   font-weight: 600;
 }
 
+.auth-button:hover:not(:disabled) {
+  background: #1f2937;
+}
+
 .auth-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -117,6 +122,17 @@
 .auth-linkText {
   margin: 0;
   font-size: 1.1rem;
+  color: #374151;
+}
+
+.auth-linkText a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-linkText a:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 980px) {

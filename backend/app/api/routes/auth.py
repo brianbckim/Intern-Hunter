@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.collections import users_collection
 from app.db.local_store import create_user as create_local_user
+from app.db.local_store import delete_user_by_email as delete_local_user_by_email
 from app.db.local_store import get_user_by_email as get_local_user_by_email
 from app.db.mongo import get_database
+from app.api.deps import get_current_user_email
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
 
 
@@ -70,3 +72,22 @@ async def login(payload: LoginRequest) -> TokenResponse:
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return TokenResponse(access_token=token, token_type="bearer")
+
+
+@router.delete("/account", status_code=status.HTTP_200_OK)
+async def delete_account(
+    current_user_email: str = Depends(get_current_user_email),
+) -> dict[str, str]:
+    db = get_database()
+
+    if db is None:
+        deleted = delete_local_user_by_email(current_user_email)
+    else:
+        users = users_collection(db)
+        result = await users.delete_one({"email": current_user_email})
+        deleted = result.deleted_count > 0
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    return {"detail": "Account deleted successfully"}

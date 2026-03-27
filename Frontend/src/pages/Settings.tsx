@@ -50,14 +50,14 @@ export default function Settings() {
 
   function handlePasswordSubmit() {
     if (!currentPw || !newPw || !confirmPw) {
-      setPwMsg('Please fill in all fields.')
+      setPwMsg(t('fillAllFields'))
       return
     }
     if (newPw !== confirmPw) {
-      setPwMsg('New passwords do not match.')
+      setPwMsg(t('passwordsMismatch'))
       return
     }
-    setPwMsg('Password change is not connected to the backend yet.')
+    setPwMsg(t('passwordNotConnected'))
     setCurrentPw('')
     setNewPw('')
     setConfirmPw('')
@@ -71,7 +71,7 @@ export default function Settings() {
       logout()
       navigate('/login', { replace: true })
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : 'Failed to delete account.')
+      setDeleteError(e instanceof Error ? e.message : t('deleteFailed'))
     } finally {
       setDeleting(false)
     }
@@ -105,8 +105,8 @@ export default function Settings() {
         {/* ── Appearance ── */}
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Appearance</div>
-            <p className="ih-muted" style={{ marginTop: 4 }}>Switch between light and dark mode.</p>
+            <div className="ih-cardTitle">{t('appearance')}</div>
+            <p className="ih-muted" style={{ marginTop: 4 }}>{t('themeDesc')}</p>
           </div>
 
           <div className="ih-cardBody">
@@ -148,9 +148,9 @@ export default function Settings() {
               </button>
 
               <div>
-                <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)' }}>Dark mode</div>
+                <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)' }}>Dark mode</div>{t('darkMode')}
                 <p className="ih-muted" style={{ marginTop: 6 }}>
-                  {theme === 'dark' ? 'Dark theme is active' : 'Light theme is active'}
+                  {theme === 'dark' ? t('darkActive') : t('lightActive')}
                 </p>
               </div>
             </div>
@@ -160,40 +160,40 @@ export default function Settings() {
         {/* ── Change Password (UI only) ── */}
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Change Password</div>
-            <p className="ih-muted" style={{ marginTop: 4 }}>Update your account password.</p>
+            <div className="ih-cardTitle">{t('changePassword')}</div>
+            <p className="ih-muted" style={{ marginTop: 4 }}>{t('updatePassword')}</p>
           </div>
 
           <div className="ih-cardBody">
             <div style={{ display: 'grid', gap: 18, maxWidth: 540 }}>
               <label style={{ display: 'grid', gap: 8 }}>
-                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>Current Password</span>
+                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>{t('currentPassword')}</span>
                 <input
                   className="ih-input"
                   type="password"
-                  placeholder="Enter current password"
+                  placeholder={t('currentPasswordPlaceholder')}
                   value={currentPw}
                   onChange={(e) => setCurrentPw(e.target.value)}
                 />
               </label>
 
               <label style={{ display: 'grid', gap: 8 }}>
-                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>New Password</span>
+                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>{t('newPassword')}</span>
                 <input
                   className="ih-input"
                   type="password"
-                  placeholder="Enter new password"
+                  placeholder={t('newPasswordPlaceholder')}
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
                 />
               </label>
 
               <label style={{ display: 'grid', gap: 8 }}>
-                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>Confirm New Password</span>
+                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>{t('confirmNewPassword')}</span>
                 <input
                   className="ih-input"
                   type="password"
-                  placeholder="Confirm new password"
+                  placeholder={t('confirmNewPasswordPlaceholder')}
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
                 />
@@ -209,7 +209,7 @@ export default function Settings() {
                   type="button"
                   onClick={handlePasswordSubmit}
                 >
-                  Update Password
+                  {t('updatePassword')}
                 </button>
               </div>
             </div>
@@ -219,9 +219,9 @@ export default function Settings() {
         {/* ── Delete Account ── */}
         <section className="ih-card" style={{ borderColor: '#ef4444' }}>
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle" style={{ color: '#ef4444' }}>Delete Account</div>
+            <div className="ih-cardTitle" style={{ color: '#ef4444' }}>{t('deleteAccount')}</div>
             <p className="ih-muted" style={{ marginTop: 4 }}>
-              Permanently delete your account and all associated data. This action cannot be undone.
+              {t('deleteConfirm')}
             </p>
           </div>
 
@@ -241,12 +241,12 @@ export default function Settings() {
                   fontWeight: 600,
                 }}
               >
-                Delete My Account
+                {t('deleteButton')}
               </button>
             ) : (
               <div style={{ display: 'grid', gap: 14, maxWidth: 540 }}>
                 <p style={{ fontSize: 18, color: 'var(--text)' }}>
-                  Are you sure? All your data (profile, resumes, feedback) will be permanently removed.
+                  {t('deleteConfirm')}
                 </p>
 
                 {deleteError ? (
@@ -270,7 +270,7 @@ export default function Settings() {
                       opacity: deleting ? 0.7 : 1,
                     }}
                   >
-                    {deleting ? 'Deleting…' : 'Yes, Delete My Account'}
+                    {deleting ? t('deleting') : t('deleteButton')}
                   </button>
                   <button
                     className="ih-btnGhost"
@@ -286,7 +286,8 @@ export default function Settings() {
           </div>
         </section>
       </div>
-    </div> 
+    </div>
+ 
   </AppLayout>
   )
 }

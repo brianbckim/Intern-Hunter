@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { deleteAccount } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
+import { useLanguageStore } from '../stores/langStore'
+import { translations } from '../lib/translate'
 import './Dashboard.css'
 
 type Theme = 'light' | 'dark'
@@ -18,6 +20,13 @@ export default function Settings() {
   const [theme, setTheme] = useState<Theme>(() => getSavedTheme())
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+
+  const language = useLanguageStore((s) => s.language)
+  const setLanguage = useLanguageStore((s) => s.setLanguage)
+
+  const t = (key: keyof typeof translations['en']) => {
+    return translations[language][key] || key
+  }
 
   // Change‑password form (UI only)
   const [currentPw, setCurrentPw] = useState('')
@@ -69,6 +78,29 @@ export default function Settings() {
 
   return (
     <AppLayout pageLabel="Settings" activeNav="settings">
+      <div className="settings-cardBody">
+
+        {/* 🌍 Language */}
+        <section className="ih-card">
+          <div className="ih-cardHeader">
+            <div className="ih-cardTitle">{t('language')}</div>
+            <p className="ih-muted">{t('languageDesc')}</p>
+          </div>
+
+          <div className="ih-cardBody settings-row">
+            <select
+              className="settings-toggle"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+            >
+              <option value="en">English</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+            </select>
+          </div>
+          
+        </section>
+
       <div className="ih-grid">
         {/* ── Appearance ── */}
         <section className="ih-card">
@@ -254,6 +286,7 @@ export default function Settings() {
           </div>
         </section>
       </div>
+    </div>
     </AppLayout>
   )
 }

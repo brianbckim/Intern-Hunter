@@ -148,7 +148,7 @@ export default function Settings() {
               </button>
 
               <div>
-                <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)' }}>Dark mode</div>{t('darkMode')}
+                <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)' }}>{t('darkMode')}</div>
                 <p className="ih-muted" style={{ marginTop: 6 }}>
                   {theme === 'dark' ? t('darkActive') : t('lightActive')}
                 </p>

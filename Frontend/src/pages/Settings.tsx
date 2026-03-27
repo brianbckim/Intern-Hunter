@@ -21,6 +21,7 @@ export default function Settings() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
 
+  // Change Language
   const language = useLanguageStore((s) => s.language)
   const setLanguage = useLanguageStore((s) => s.setLanguage)
 
@@ -80,7 +81,7 @@ export default function Settings() {
     <AppLayout pageLabel="Settings" activeNav="settings">
       <div className="settings-cardBody">
 
-        {/* 🌍 Language */}
+        {/* ── Language ── */}
         <section className="ih-card">
           <div className="ih-cardHeader">
             <div className="ih-cardTitle">{t('language')}</div>
@@ -98,7 +99,6 @@ export default function Settings() {
               <option value="fr">Français</option>
             </select>
           </div>
-          
         </section>
 
       <div className="ih-grid">
@@ -286,7 +286,7 @@ export default function Settings() {
           </div>
         </section>
       </div>
-    </div>
-    </AppLayout>
+    </div> 
+  </AppLayout>
   )
 }

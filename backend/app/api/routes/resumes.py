@@ -15,9 +15,10 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_user_email
-from app.db.collections import recommendations_snapshots_collection, resume_feedback_collection, resumes_collection
+from app.db.collections import recommendations_snapshots_collection, resume_feedback_collection, resumes_collection, tailored_resume_snapshots_collection
 from app.db.local_store import create_resume as create_local_resume
 from app.db.local_store import delete_recommendations_snapshots_by_resume_id_for_user as delete_local_recommendations_by_resume_id
+from app.db.local_store import delete_tailored_resume_snapshots_by_resume_id_for_user as delete_local_tailored_resume_snapshots_by_resume_id
 from app.db.local_store import delete_resume_by_id_for_user as delete_local_resume_by_id_for_user
 from app.db.local_store import delete_resume_feedback_by_resume_id_for_user as delete_local_feedback_by_resume_id
 from app.db.local_store import get_resume_by_id_for_user as get_local_resume_by_id_for_user
@@ -430,6 +431,7 @@ async def delete_resume(
 
         deleted_feedback = delete_local_feedback_by_resume_id(resume_id=resume_id, user_email=user_email)
         deleted_recommendations = delete_local_recommendations_by_resume_id(resume_id=resume_id, user_email=user_email)
+        delete_local_tailored_resume_snapshots_by_resume_id(resume_id=resume_id, user_email=user_email)
         return DeleteResumeResponse(
             deleted=True,
             resume_id=resume_id,
@@ -459,6 +461,8 @@ async def delete_resume(
 
     rec_coll = recommendations_snapshots_collection(db)
     rec_result = await rec_coll.delete_many({"user_email": user_email, "resume_id": resume_id})
+    tailored_coll = tailored_resume_snapshots_collection(db)
+    await tailored_coll.delete_many({"user_email": user_email, "resume_id": resume_id})
 
     return DeleteResumeResponse(
         deleted=True,

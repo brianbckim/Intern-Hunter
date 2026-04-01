@@ -1,5 +1,5 @@
 // translations.ts
-export type Language = 'en' | 'es' | 'fr'
+export type Language = 'en' | 'es' | 'fr' | 'ko'
 export type TranslationKeys =
   | 'appearance'
   | 'themeDesc'
@@ -121,5 +121,36 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     cancel: 'Annuler',
     deleting: 'Suppression…',
     deleteFailed: "Échec de la suppression du compte.",
+  },
+
+  ko: {
+    appearance: '화면 설정',
+    themeDesc: '라이트 모드와 다크 모드 사이를 전환합니다.',
+    darkMode: '다크 모드',
+    darkActive: '다크 테마가 활성화되었습니다',
+    lightActive: '라이트 테마가 활성화되었습니다',
+
+    language: '언어',
+    languageDesc: '선호하는 언어를 선택하세요.',
+
+    currentPassword: '현재 비밀번호',
+    currentPasswordPlaceholder: '현재 비밀번호를 입력하세요',
+    newPassword: '새 비밀번호',
+    newPasswordPlaceholder: '새 비밀번호를 입력하세요',
+    confirmNewPassword: '새 비밀번호 확인',
+    confirmNewPasswordPlaceholder: '새 비밀번호를 다시 입력하세요',
+    fillAllFields: '모든 항목을 입력해 주세요.',
+    passwordsMismatch: '새 비밀번호가 서로 일치하지 않습니다.',
+    passwordNotConnected: '비밀번호 변경 기능은 아직 백엔드와 연결되어 있지 않습니다.',
+
+    changePassword: '비밀번호 변경',
+    updatePassword: '비밀번호 업데이트',
+
+    deleteAccount: '계정 삭제',
+    deleteConfirm: '정말 삭제하시겠습니까? 모든 데이터(프로필, 이력서, 피드백)가 영구적으로 삭제됩니다.',
+    deleteButton: '내 계정 삭제',
+    cancel: '취소',
+    deleting: '삭제 중…',
+    deleteFailed: '계정 삭제에 실패했습니다.',
   },
 }

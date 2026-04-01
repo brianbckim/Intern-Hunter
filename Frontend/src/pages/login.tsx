@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ApiError } from '../lib/api'
 import { getToken, login as loginService } from '../lib/authService'
+import { useUiText } from '../lib/uiLanguage'
 import { useAuthStore } from '../stores/authStore'
 import './Auth.css'
 
@@ -10,6 +11,7 @@ export default function Login() {
   const location = useLocation()
   const setToken = useAuthStore((state) => state.setToken)
   const token = getToken()
+  const { ui } = useUiText()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -43,7 +45,7 @@ export default function Login() {
           ? errorValue.message
           : errorValue instanceof Error
             ? errorValue.message
-            : 'Login failed. Please try again.'
+            : ui('Login failed. Please try again.', '로그인에 실패했습니다. 다시 시도해 주세요.')
       setError(message)
     } finally {
       setSubmitting(false)
@@ -61,12 +63,12 @@ export default function Login() {
           </div>
           <div>
             <h1>InternHunter Login</h1>
-            <p className="auth-subtitle">Sign in to continue your internship journey.</p>
+            <p className="auth-subtitle">{ui('Sign in to continue your internship journey.', '인턴십 여정을 계속하려면 로그인하세요.')}</p>
           </div>
         </div>
 
         <label className="auth-field">
-          <span>Email</span>
+          <span>{ui('Email', '이메일')}</span>
           <input
             type="email"
             value={email}
@@ -76,23 +78,23 @@ export default function Login() {
         </label>
 
         <label className="auth-field">
-          <span>Password</span>
+          <span>{ui('Password', '비밀번호')}</span>
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter your password"
+            placeholder={ui('Enter your password', '비밀번호를 입력하세요')}
           />
         </label>
 
         {error ? <p className="auth-error">{error}</p> : null}
 
         <button className="auth-button" disabled={!canSubmit || submitting} onClick={() => void handleLogin()}>
-          {submitting ? 'Logging in...' : 'Login'}
+          {submitting ? ui('Logging in...', '로그인 중...') : ui('Login', '로그인')}
         </button>
 
         <p className="auth-linkText">
-          Don’t have an account? <Link to="/register">Register</Link>
+          {ui('Don’t have an account?', '계정이 없으신가요?')} <Link to="/register">{ui('Register', '회원가입')}</Link>
         </p>
       </section>
     </div>

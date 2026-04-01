@@ -16,6 +16,8 @@ export const API_ENDPOINTS = {
     ensure: '/api/recommendations/ensure',
     latest: '/api/recommendations/latest',
     tailorResume: '/api/recommendations/tailor-resume',
+    tailorResumeEnsure: '/api/recommendations/tailor-resume/ensure',
+    tailorResumeLatest: '/api/recommendations/tailor-resume/latest',
   },
 }
 
@@ -174,6 +176,19 @@ export type TailorResumeResponse = {
   keywords_to_highlight: string[]
 }
 
+export type TailorResumeSnapshotStatus = 'missing' | 'pending' | 'ready' | 'error'
+
+export type TailorResumeSnapshotResponse = {
+  status: TailorResumeSnapshotStatus
+  snapshot_id: string | null
+  resume_id: string | null
+  job_uid: string
+  created_at: string | null
+  updated_at: string | null
+  data: TailorResumeResponse | null
+  error: string | null
+}
+
 export type GenerateRecommendationsRequest = {
   limit?: number
   candidate_pool?: number
@@ -212,6 +227,23 @@ export async function tailorResumeForJob(payload: TailorResumeRequest): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+export async function ensureTailorResumeForJob(
+  payload: TailorResumeRequest
+): Promise<TailorResumeSnapshotResponse> {
+  return apiJson<TailorResumeSnapshotResponse>(API_ENDPOINTS.recommendations.tailorResumeEnsure, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getLatestTailoredResumes(resumeId?: string | null): Promise<TailorResumeSnapshotResponse[]> {
+  const url = resumeId
+    ? `${API_ENDPOINTS.recommendations.tailorResumeLatest}?resume_id=${encodeURIComponent(resumeId)}`
+    : API_ENDPOINTS.recommendations.tailorResumeLatest
+  return apiJson<TailorResumeSnapshotResponse[]>(url)
 }
 
 export type RecruiterItem = {

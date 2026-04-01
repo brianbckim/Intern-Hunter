@@ -2,21 +2,27 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import ApplyMarkModal from '../components/ApplyMarkModal'
+import { getAccessToken } from '../lib/auth'
 import {
   ApiError,
+  deleteMyApplication,
   ensureRecommendations,
+  ensureTailorResumeForJob,
   getLatestRecommendations,
+  getLatestTailoredResumes,
   listMyApplications,
   listMyResumes,
   recordJobApplication,
-  tailorResumeForJob,
   type RecommendationJob,
   type RecommendationsResponse,
+  type TailorResumeSnapshotResponse,
   type TailorResumeResponse,
 } from '../lib/api'
+import { useUiText } from '../lib/uiLanguage'
 import './Dashboard.css'
 
 type Job = {
+  uid: string
   external_id: string
   title: string
   company?: string
@@ -68,8 +74,41 @@ function appliedKeyForRecommendation(job: RecommendationJob): string {
   return buildAppliedKey(source, externalId)
 }
 
+function isTrackedAsApplied(status: string | null | undefined): boolean {
+  return status === 'applied' || status === 'interview' || status === 'offer' || status === 'rejected'
+}
+
+function applyTailoringSnapshots(
+  snapshots: TailorResumeSnapshotResponse[],
+  setters: {
+    setTailoringByUid: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+    setTailoredResumeByUid: React.Dispatch<React.SetStateAction<Record<string, TailorResumeResponse>>>
+    setTailoringErrorByUid: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  }
+): void {
+  const pending: Record<string, boolean> = {}
+  const ready: Record<string, TailorResumeResponse> = {}
+  const errors: Record<string, string> = {}
+
+  for (const snapshot of snapshots) {
+    if (snapshot.status === 'pending') {
+      pending[snapshot.job_uid] = true
+    } else if (snapshot.status === 'ready' && snapshot.data) {
+      ready[snapshot.job_uid] = snapshot.data
+    } else if (snapshot.status === 'error' && snapshot.error) {
+      errors[snapshot.job_uid] = snapshot.error
+    }
+  }
+
+  setters.setTailoringByUid(pending)
+  setters.setTailoredResumeByUid(ready)
+  setters.setTailoringErrorByUid(errors)
+}
+
 export default function Jobs() {
+  const { ui } = useUiText()
   const [searchParams, setSearchParams] = useSearchParams()
+  const token = getAccessToken()
   const initialTab = searchParams.get('tab') === 'ai' ? 'ai' : 'internships'
   const [activeTab, setActiveTab] = useState<'ai' | 'internships'>(initialTab)
 
@@ -94,7 +133,7 @@ export default function Jobs() {
   const [sortBy, setSortBy] = useState('newest')
   const [page, setPage] = useState(1)
 
-  const [appliedKeys, setAppliedKeys] = useState<Set<string>>(() => new Set())
+  const [applicationRecords, setApplicationRecords] = useState<Record<string, { applicationId: string; status: string }>>({})
   const [pendingApply, setPendingApply] = useState<PendingApply | null>(null)
   const [showApplyModal, setShowApplyModal] = useState(false)
   const [applyModalError, setApplyModalError] = useState<string | null>(null)
@@ -103,11 +142,14 @@ export default function Jobs() {
   const refreshAppliedKeys = useCallback(async () => {
     try {
       const list = await listMyApplications()
-      const next = new Set<string>()
+      const next: Record<string, { applicationId: string; status: string }> = {}
       for (const row of list) {
-        next.add(buildAppliedKey(row.job_source, row.job_external_id))
+        next[buildAppliedKey(row.job_source, row.job_external_id)] = {
+          applicationId: row.application_id,
+          status: row.status,
+        }
       }
-      setAppliedKeys(next)
+      setApplicationRecords(next)
     } catch {
       // non-blocking: Jobs still usable if applications endpoint fails
     }
@@ -137,7 +179,7 @@ export default function Jobs() {
         const data = (await response.json()) as Job[]
         setJobs(data)
       } catch (errorValue) {
-        const message = errorValue instanceof Error ? errorValue.message : 'Failed to load jobs.'
+        const message = errorValue instanceof Error ? errorValue.message : ui('Failed to load jobs.', '채용공고를 불러오지 못했습니다.')
         setError(message)
       } finally {
         setLoading(false)
@@ -146,6 +188,95 @@ export default function Jobs() {
 
     void loadJobs()
   }, [])
+
+  useEffect(() => {
+    if (!token) {
+      setRecResumeId(null)
+      setTailoringByUid({})
+      setTailoredResumeByUid({})
+      setTailoringErrorByUid({})
+      return
+    }
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const resumes = await listMyResumes()
+        if (cancelled) return
+        const latestResumeId = resumes[0]?.resume_id ?? null
+        setRecResumeId(latestResumeId)
+      } catch {
+        if (!cancelled) {
+          setRecResumeId(null)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (!recResumeId) {
+      setTailoringByUid({})
+      setTailoredResumeByUid({})
+      setTailoringErrorByUid({})
+      return
+    }
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const snapshots = await getLatestTailoredResumes(recResumeId)
+        if (cancelled) return
+        applyTailoringSnapshots(snapshots, {
+          setTailoringByUid,
+          setTailoredResumeByUid,
+          setTailoringErrorByUid,
+        })
+      } catch {
+        if (!cancelled) {
+          setTailoringByUid({})
+          setTailoredResumeByUid({})
+          setTailoringErrorByUid({})
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [recResumeId])
+
+  useEffect(() => {
+    if (!recResumeId) return
+    if (!Object.values(tailoringByUid).some(Boolean)) return
+
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const snapshots = await getLatestTailoredResumes(recResumeId)
+          if (cancelled) return
+          applyTailoringSnapshots(snapshots, {
+            setTailoringByUid,
+            setTailoredResumeByUid,
+            setTailoringErrorByUid,
+          })
+        } catch {
+          // best-effort polling while generation is pending
+        }
+      })()
+    }, 1500)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [recResumeId, tailoringByUid])
 
   useEffect(() => {
     const tab = searchParams.get('tab') === 'ai' ? 'ai' : 'internships'
@@ -295,7 +426,7 @@ export default function Jobs() {
           return
         }
         if (latest.status === 'error') {
-          setRecError(latest.error || 'Failed to generate recommendations.')
+          setRecError(latest.error || ui('Failed to generate recommendations.', '추천 생성에 실패했습니다.'))
           setRecLoading(false)
           return
         }
@@ -305,9 +436,9 @@ export default function Jobs() {
       } catch (e) {
         if (cancelled) return
         if (e instanceof ApiError && e.status === 401) {
-          setRecError('Please login again to load recommendations.')
+          setRecError(ui('Please login again to load recommendations.', '추천을 불러오려면 다시 로그인해 주세요.'))
         } else {
-          setRecError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+          setRecError(e instanceof Error ? e.message : ui('Failed to load recommendations.', '추천을 불러오지 못했습니다.'))
         }
         setRecLoading(false)
       }
@@ -323,7 +454,7 @@ export default function Jobs() {
         const latestResumeId = resumes[0]?.resume_id ?? null
         if (!latestResumeId) {
           setRecLoading(false)
-          setRecError('Upload a resume to get AI recommendations.')
+          setRecError(ui('Upload a resume to get AI recommendations.', 'AI 추천을 받으려면 이력서를 업로드하세요.'))
           return
         }
 
@@ -353,9 +484,9 @@ export default function Jobs() {
       } catch (e) {
         if (cancelled) return
         if (e instanceof ApiError && e.status === 401) {
-          setRecError('Please login again to load recommendations.')
+          setRecError(ui('Please login again to load recommendations.', '추천을 불러오려면 다시 로그인해 주세요.'))
         } else {
-          setRecError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+          setRecError(e instanceof Error ? e.message : ui('Failed to load recommendations.', '추천을 불러오지 못했습니다.'))
         }
         setRecLoading(false)
       }
@@ -370,7 +501,7 @@ export default function Jobs() {
 
   async function handleTailorResume(job: RecommendationJob) {
     if (!recResumeId) {
-      setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: 'Upload a resume before tailoring.' }))
+      setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: ui('Upload a resume before tailoring.', '이력서를 업로드한 뒤 맞춤 생성을 진행하세요.') }))
       return
     }
 
@@ -378,13 +509,40 @@ export default function Jobs() {
     setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: '' }))
 
     try {
-      const value = await tailorResumeForJob({ job_uid: job.uid, resume_id: recResumeId })
-      setTailoredResumeByUid((previous) => ({ ...previous, [job.uid]: value }))
+      const snapshot = await ensureTailorResumeForJob({ job_uid: job.uid, resume_id: recResumeId })
+      applyTailoringSnapshots([snapshot], {
+        setTailoringByUid: (updater) => {
+          if (typeof updater === 'function') {
+            setTailoringByUid((previous) => ({ ...previous, ...updater(previous) }))
+          } else {
+            setTailoringByUid((previous) => ({ ...previous, ...updater }))
+          }
+        },
+        setTailoredResumeByUid: (updater) => {
+          if (typeof updater === 'function') {
+            setTailoredResumeByUid((previous) => ({ ...previous, ...updater(previous) }))
+          } else {
+            setTailoredResumeByUid((previous) => ({ ...previous, ...updater }))
+          }
+        },
+        setTailoringErrorByUid: (updater) => {
+          if (typeof updater === 'function') {
+            setTailoringErrorByUid((previous) => ({ ...previous, ...updater(previous) }))
+          } else {
+            setTailoringErrorByUid((previous) => ({ ...previous, ...updater }))
+          }
+        },
+      })
     } catch (errorValue) {
-      const message = errorValue instanceof Error ? errorValue.message : 'Failed to tailor resume.'
+      const message = errorValue instanceof Error ? errorValue.message : ui('Failed to tailor resume.', '이력서 맞춤 생성에 실패했습니다.')
       setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: message }))
     } finally {
-      setTailoringByUid((previous) => ({ ...previous, [job.uid]: false }))
+      setTailoringByUid((previous) => {
+        if (previous[job.uid]) {
+          return previous
+        }
+        return { ...previous, [job.uid]: false }
+      })
     }
   }
 
@@ -396,8 +554,74 @@ export default function Jobs() {
         setCopiedUid((current) => (current === jobUid ? null : current))
       }, 1500)
     } catch {
-      setTailoringErrorByUid((previous) => ({ ...previous, [jobUid]: 'Failed to copy tailored resume.' }))
+      setTailoringErrorByUid((previous) => ({ ...previous, [jobUid]: ui('Failed to copy tailored resume.', '맞춤 이력서 복사에 실패했습니다.') }))
     }
+  }
+
+  function renderTailoredResult(jobUid: string) {
+    const tailored = tailoredResumeByUid[jobUid]
+    const tailoringError = tailoringErrorByUid[jobUid]
+
+    return (
+      <>
+        {tailoringError ? <div className="ih-error" style={{ marginTop: 12 }}>{tailoringError}</div> : null}
+
+        {tailored ? (
+          <div
+            style={{
+              marginTop: 14,
+              border: '1px solid #d1d5db',
+              borderRadius: 10,
+              padding: 14,
+              background: '#fafafa',
+              display: 'grid',
+              gap: 12,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>{ui('Tailored Resume Draft', '맞춤 이력서 초안')}</div>
+            <div className="ih-muted">{tailored.summary}</div>
+
+            {tailored.keywords_to_highlight.length ? (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{ui('Keywords to highlight', '강조할 키워드')}</div>
+                <div className="ih-muted">{tailored.keywords_to_highlight.join(', ')}</div>
+              </div>
+            ) : null}
+
+            {tailored.targeted_edits.length ? (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{ui('Targeted edits', '추천 수정사항')}</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {tailored.targeted_edits.map((item) => (
+                    <li key={item} className="ih-muted" style={{ marginBottom: 4 }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>{ui('Draft', '초안')}</div>
+              <textarea
+                className="ih-input"
+                value={tailored.tailored_resume}
+                readOnly
+                style={{ minHeight: 260, width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+              />
+            </div>
+
+            <div>
+              <button
+                className="ih-btnGhost"
+                type="button"
+                onClick={() => void handleCopyTailoredResume(jobUid, tailored.tailored_resume)}
+              >
+                {copiedUid === jobUid ? ui('Copied', '복사됨') : ui('Copy Draft', '초안 복사')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </>
+    )
   }
 
   function openApplyModal(payload: PendingApply): void {
@@ -427,28 +651,62 @@ export default function Jobs() {
         job_url: pendingApply.job_url,
       })
       const key = buildAppliedKey(pendingApply.job_source, pendingApply.job_external_id)
-      setAppliedKeys((prev) => {
-        const next = new Set(prev)
-        next.add(key)
-        return next
-      })
+      setApplicationRecords((prev) => ({
+        ...prev,
+        [key]: {
+          applicationId: `${pendingApply.job_source}-${pendingApply.job_external_id}`,
+          status: 'applied',
+        },
+      }))
+      void refreshAppliedKeys()
       setPendingApply(null)
       setShowApplyModal(false)
     } catch (errorValue) {
       const message =
-        errorValue instanceof ApiError ? errorValue.message : 'Could not save application. Try again.'
+        errorValue instanceof ApiError ? errorValue.message : ui('Could not save application. Try again.', '지원 내역을 저장하지 못했습니다. 다시 시도해 주세요.')
       setApplyModalError(message)
     } finally {
       setApplySaving(false)
     }
   }
 
+  async function toggleSavedJob(payload: PendingApply): Promise<void> {
+    const key = buildAppliedKey(payload.job_source, payload.job_external_id)
+    const current = applicationRecords[key]
+
+    try {
+      if (current?.status === 'saved' && current.applicationId) {
+        await deleteMyApplication(current.applicationId)
+        setApplicationRecords((prev) => {
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+        return
+      }
+
+      await recordJobApplication({
+        job_source: payload.job_source,
+        job_external_id: payload.job_external_id,
+        status: 'saved',
+        job_title: payload.title,
+        job_company: payload.company,
+        job_location: payload.location,
+        job_url: payload.job_url,
+      })
+      void refreshAppliedKeys()
+    } catch (errorValue) {
+      const message = errorValue instanceof ApiError ? errorValue.message : ui('Could not update saved job.', '저장한 공고를 업데이트하지 못했습니다.')
+      setError(message)
+    }
+  }
+
   function renderRecommendationJob(job: RecommendationJob) {
-    const tailored = tailoredResumeByUid[job.uid]
     const tailoring = tailoringByUid[job.uid] || false
-    const tailoringError = tailoringErrorByUid[job.uid]
     const recKey = appliedKeyForRecommendation(job)
-    const alreadyApplied = appliedKeys.has(recKey)
+    const recRecord = applicationRecords[recKey]
+    const alreadyApplied = isTrackedAsApplied(recRecord?.status)
+    const isSaved = recRecord?.status === 'saved'
     const source = (job.source && job.source.trim()) || 'internhunter'
     const externalId =
       (job.external_id && String(job.external_id).trim()) ||
@@ -466,10 +724,26 @@ export default function Jobs() {
 
           <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="ih-btnPrimary" type="button" disabled={tailoring} onClick={() => void handleTailorResume(job)}>
-              {tailoring ? 'Tailoring...' : 'Tailor Resume to JD'}
+              {tailoring ? ui('Tailoring...', '맞춤 생성 중...') : ui('Tailor Resume to JD', 'JD 기준 이력서 맞춤 생성')}
+            </button>
+            <button
+              className="ih-btnGhost"
+              type="button"
+              onClick={() =>
+                void toggleSavedJob({
+                  job_source: source,
+                  job_external_id: externalId,
+                  title: job.title || 'Untitled role',
+                  company: job.company || '—',
+                  location: job.location || '—',
+                  job_url: job.url?.trim() || null,
+                })
+              }
+            >
+              {isSaved ? ui('Unsave', '저장 취소') : ui('Save Job', '공고 저장')}
             </button>
             {alreadyApplied ? (
-              <span className="ih-jobAppliedPill">Applied already</span>
+              <span className="ih-jobAppliedPill">{ui('Applied already', '이미 지원함')}</span>
             ) : job.url ? (
               <a
                 className="ih-btnPrimary"
@@ -488,7 +762,7 @@ export default function Jobs() {
                   })
                 }
               >
-                Apply
+                {ui('Apply', '지원')}
               </a>
             ) : (
               <button
@@ -505,74 +779,18 @@ export default function Jobs() {
                   })
                 }
               >
-                Apply
+                {ui('Apply', '지원')}
               </button>
             )}
           </div>
-
-          {tailoringError ? <div className="ih-error" style={{ marginTop: 12 }}>{tailoringError}</div> : null}
-
-          {tailored ? (
-            <div
-              style={{
-                marginTop: 14,
-                border: '1px solid #d1d5db',
-                borderRadius: 10,
-                padding: 14,
-                background: '#fafafa',
-                display: 'grid',
-                gap: 12,
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>Tailored Resume Draft</div>
-              <div className="ih-muted">{tailored.summary}</div>
-
-              {tailored.keywords_to_highlight.length ? (
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Keywords to highlight</div>
-                  <div className="ih-muted">{tailored.keywords_to_highlight.join(', ')}</div>
-                </div>
-              ) : null}
-
-              {tailored.targeted_edits.length ? (
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Targeted edits</div>
-                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {tailored.targeted_edits.map((item) => (
-                      <li key={item} className="ih-muted" style={{ marginBottom: 4 }}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Draft</div>
-                <textarea
-                  className="ih-input"
-                  value={tailored.tailored_resume}
-                  readOnly
-                  style={{ minHeight: 260, width: '100%', resize: 'vertical', lineHeight: 1.45 }}
-                />
-              </div>
-
-              <div>
-                <button
-                  className="ih-btnGhost"
-                  type="button"
-                  onClick={() => void handleCopyTailoredResume(job.uid, tailored.tailored_resume)}
-                >
-                  {copiedUid === job.uid ? 'Copied' : 'Copy Draft'}
-                </button>
-              </div>
-            </div>
-          ) : null}
+          {renderTailoredResult(job.uid)}
         </div>
       </div>
     )
   }
 
   return (
-    <AppLayout pageLabel="Jobs" activeNav="jobs">
+    <AppLayout pageLabel={ui('Jobs', '채용공고')} activeNav="jobs">
       <ApplyMarkModal
         open={showApplyModal}
         jobTitle={pendingApply?.title ?? ''}
@@ -586,21 +804,21 @@ export default function Jobs() {
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Jobs</div>
+            <div className="ih-cardTitle">{ui('Jobs', '채용공고')}</div>
             <div className="ih-actions" style={{ marginTop: 12 }}>
               <button
                 type="button"
                 className={activeTab === 'ai' ? 'ih-btnPrimary' : 'ih-btnGhost'}
                 onClick={() => setTab('ai')}
               >
-                AI Recommendations
+                {ui('AI Recommendations', 'AI 추천')}
               </button>
               <button
                 type="button"
                 className={activeTab === 'internships' ? 'ih-btnPrimary' : 'ih-btnGhost'}
                 onClick={() => setTab('internships')}
               >
-                Internships
+                {ui('Internships', '인턴십')}
               </button>
             </div>
           </div>
@@ -612,8 +830,8 @@ export default function Jobs() {
 
                 <div className="ih-row" style={{ marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 22 }}>AI-based recommendations</div>
-                    <div className="ih-muted">Recommendations generate automatically based on your latest resume.</div>
+                    <div style={{ fontWeight: 700, fontSize: 22 }}>{ui('AI-based recommendations', 'AI 기반 추천')}</div>
+                    <div className="ih-muted">{ui('Recommendations generate automatically based on your latest resume.', '추천은 최신 이력서를 기준으로 자동 생성됩니다.')}</div>
                   </div>
                 </div>
 
@@ -623,23 +841,23 @@ export default function Jobs() {
                   </div>
                 ) : null}
 
-                {recLoading ? <div className="ih-muted">Loading… (AI recommendations are generating)</div> : null}
+                {recLoading ? <div className="ih-muted">{ui('Loading… (AI recommendations are generating)', '불러오는 중… (AI 추천 생성 중)')}</div> : null}
 
                 {recData?.jobs?.length ? (
                   <>
                     {recData.jobs.slice(0, 20).map((job) => renderRecommendationJob(job))}
                     <div className="ih-muted" style={{ marginTop: 8 }}>
-                      {recData.ai_used ? 'Ordered by AI.' : 'Ordered by heuristics (AI not enabled).'}
+                      {recData.ai_used ? ui('Ordered by AI.', 'AI 기준 정렬됨.') : ui('Ordered by heuristics (AI not enabled).', '휴리스틱 기준 정렬됨 (AI 미사용).')}
                     </div>
                   </>
                 ) : !recLoading ? (
-                  <div className="ih-muted">No recommendations generated yet.</div>
+                  <div className="ih-muted">{ui('No recommendations generated yet.', '아직 생성된 추천이 없습니다.')}</div>
                 ) : null}
               </>
             ) : (
               <>
                 <div className="ih-muted" style={{ marginBottom: 12 }}>
-                  {filteredJobs.length} results
+                  {ui(`${filteredJobs.length} results`, `결과 ${filteredJobs.length}건`)}
                 </div>
 
                 {error ? <p className="ih-error">{error}</p> : null}
@@ -647,21 +865,21 @@ export default function Jobs() {
                 <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
                   <input
                     className="ih-input"
-                    placeholder="Search title, company, location..."
+                    placeholder={ui('Search title, company, location...', '직무명, 회사, 지역 검색...')}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
 
                   <select className="ih-input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="company">Company A-Z</option>
-                    <option value="title">Title A-Z</option>
+                    <option value="newest">{ui('Newest', '최신순')}</option>
+                    <option value="oldest">{ui('Oldest', '오래된순')}</option>
+                    <option value="company">{ui('Company A-Z', '회사명 A-Z')}</option>
+                    <option value="title">{ui('Title A-Z', '직무명 A-Z')}</option>
                   </select>
                 </div>
 
                 <div style={{ marginBottom: 24 }}>
-                  <div style={{ marginBottom: 8, fontWeight: 600 }}>Category</div>
+                  <div style={{ marginBottom: 8, fontWeight: 600 }}>{ui('Category', '카테고리')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                     {categories.map((category) => (
                       <label key={category} style={{ fontSize: 14 }}>
@@ -677,7 +895,7 @@ export default function Jobs() {
                   </div>
                 </div>
 
-                {loading ? <div className="ih-muted">Loading...</div> : null}
+                {loading ? <div className="ih-muted">{ui('Loading...', '불러오는 중...')}</div> : null}
 
                 {!loading ? (
                   <>
@@ -690,26 +908,48 @@ export default function Jobs() {
                         <div className="ih-muted" style={{ marginBottom: 6 }}>
                           {job.company || 'Unknown company'} • {job.location || 'Unknown location'}
                         </div>
-                        <div className="ih-muted">Posted: {formatDate(job.date_posted) || '—'}</div>
+                          <div className="ih-muted">{ui('Posted', '게시일')}: {formatDate(job.date_posted) || '—'}</div>
 
-                        <div style={{ marginTop: 12 }}>
+                        <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button
+                            className="ih-btnPrimary"
+                            type="button"
+                            disabled={tailoringByUid[job.uid] || false}
+                            onClick={() =>
+                              void handleTailorResume({
+                                uid: job.uid,
+                                source: job.source || 'internhunter',
+                                external_id: String(job.external_id),
+                                title: job.title || 'Untitled role',
+                                company: job.company || null,
+                                location: job.location || null,
+                                url: job.url || null,
+                                category: job.category || null,
+                                sponsorship: null,
+                                date_posted: job.date_posted ?? null,
+                                score: null,
+                                reason: null,
+                              })
+                            }
+                          >
+                            {tailoringByUid[job.uid] ? ui('Tailoring...', '맞춤 생성 중...') : ui('Tailor Resume to JD', 'JD 기준 이력서 맞춤 생성')}
+                          </button>
                           {(() => {
                             const listKey = appliedKeyForListing(job)
-                            const applied = appliedKeys.has(listKey)
+                            const record = applicationRecords[listKey]
+                            const applied = isTrackedAsApplied(record?.status)
+                            const saved = record?.status === 'saved'
                             const source = (job.source && job.source.trim()) || 'internhunter'
                             if (applied) {
-                              return <span className="ih-jobAppliedPill">Applied already</span>
+                              return <span className="ih-jobAppliedPill">{ui('Applied already', '이미 지원함')}</span>
                             }
-                            if (job.url) {
-                              return (
-                                <a
-                                  className="ih-btnPrimary"
-                                  href={job.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{ textDecoration: 'none', display: 'inline-block' }}
+                            return (
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                <button
+                                  className="ih-btnGhost"
+                                  type="button"
                                   onClick={() =>
-                                    openApplyModal({
+                                    void toggleSavedJob({
                                       job_source: source,
                                       job_external_id: String(job.external_id),
                                       title: job.title || 'Untitled role',
@@ -719,30 +959,52 @@ export default function Jobs() {
                                     })
                                   }
                                 >
-                                  Apply
-                                </a>
-                              )
-                            }
-                            return (
-                              <button
-                                className="ih-btnPrimary"
-                                type="button"
-                                onClick={() =>
-                                  openApplyModal({
-                                    job_source: source,
-                                    job_external_id: String(job.external_id),
-                                    title: job.title || 'Untitled role',
-                                    company: job.company || '—',
-                                    location: job.location || '—',
-                                    job_url: null,
-                                  })
-                                }
-                              >
-                                Apply
-                              </button>
+                                  {saved ? ui('Unsave', '저장 취소') : ui('Save Job', '공고 저장')}
+                                </button>
+                                {job.url ? (
+                                  <a
+                                    className="ih-btnPrimary"
+                                    href={job.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ textDecoration: 'none', display: 'inline-block' }}
+                                    onClick={() =>
+                                      openApplyModal({
+                                        job_source: source,
+                                        job_external_id: String(job.external_id),
+                                        title: job.title || 'Untitled role',
+                                        company: job.company || '—',
+                                        location: job.location || '—',
+                                        job_url: job.url?.trim() || null,
+                                      })
+                                    }
+                                  >
+                                    {ui('Apply', '지원')}
+                                  </a>
+                                ) : (
+                                  <button
+                                    className="ih-btnPrimary"
+                                    type="button"
+                                    onClick={() =>
+                                      openApplyModal({
+                                        job_source: source,
+                                        job_external_id: String(job.external_id),
+                                        title: job.title || 'Untitled role',
+                                        company: job.company || '—',
+                                        location: job.location || '—',
+                                        job_url: null,
+                                      })
+                                    }
+                                  >
+                                    {ui('Apply', '지원')}
+                                  </button>
+                                )}
+                              </div>
                             )
                           })()}
                         </div>
+
+                        {renderTailoredResult(job.uid)}
                       </div>
                     ))}
 
@@ -760,11 +1022,11 @@ export default function Jobs() {
                         disabled={page === 1}
                         onClick={() => setPage((current) => current - 1)}
                       >
-                        Previous
+                        {ui('Previous', '이전')}
                       </button>
 
                       <span className="ih-muted">
-                        Page {page} of {totalPages}
+                        {ui(`Page ${page} of ${totalPages}`, `${page} / ${totalPages} 페이지`)}
                       </span>
 
                       <button
@@ -772,7 +1034,7 @@ export default function Jobs() {
                         disabled={page === totalPages}
                         onClick={() => setPage((current) => current + 1)}
                       >
-                        Next
+                        {ui('Next', '다음')}
                       </button>
                     </div>
                   </>

@@ -1,0 +1,94 @@
+.ih-applyMark-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 24px;
+}
+
+.ih-applyMark-modal {
+  position: relative;
+  background: var(--card-bg, #fff);
+  color: var(--text, #111827);
+  border-radius: 14px;
+  max-width: 440px;
+  width: 100%;
+  padding: 24px 26px 22px;
+  border: 1px solid var(--border, #e5e7eb);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
+}
+
+.ih-applyMark-closeX {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted, #6b7280);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ih-applyMark-closeX:hover:not(:disabled) {
+  background: var(--surface-subtle, #f3f4f6);
+  color: var(--text, #111827);
+}
+
+.ih-applyMark-closeX:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ih-applyMark-title {
+  margin: 0 36px 10px 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ih-applyMark-lead {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted, #6b7280);
+}
+
+.ih-applyMark-job {
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--surface-muted, #f3f4f6);
+  margin-bottom: 18px;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.ih-applyMark-jobTitle {
+  font-weight: 600;
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+
+.ih-applyMark-jobMeta {
+  font-size: 15px;
+}
+
+.ih-applyMark-error {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.ih-applyMark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}

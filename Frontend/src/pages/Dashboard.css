@@ -424,6 +424,102 @@
     padding: 0;
 }
 
+.ih-appTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 18px;
+}
+
+.ih-appTable th,
+.ih-appTable td {
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.ih-appTable th {
+    font-weight: 700;
+    color: var(--muted);
+    font-size: 16px;
+}
+
+.ih-appStatus {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--pill-border, #a5f3fc);
+    background: var(--pill-bg, #ecfeff);
+    color: var(--pill-text, #0e7490);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.ih-appToolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.ih-appSearch {
+    flex: 1;
+    min-width: 200px;
+    max-width: 360px;
+}
+
+.ih-appLinkBtn {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong, #d1d5db);
+    background: #ffffff;
+    color: var(--text, #111827);
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: var(--shadow-soft, 0 1px 2px rgba(0, 0, 0, 0.04));
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ih-appLinkBtn:hover {
+    background: var(--surface-subtle, #f3f4f6);
+    border-color: var(--border, #e5e7eb);
+}
+
+.ih-appDeleteBtn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #fecaca;
+    background: #fff;
+    color: #b91c1c;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ih-appDeleteBtn:hover:not(:disabled) {
+    background: #fef2f2;
+}
+
+.ih-appDeleteBtn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ih-jobAppliedPill {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong, #d1d5db);
+    background: var(--surface-muted, #f3f4f6);
+    color: var(--muted, #6b7280);
+    font-size: 15px;
+    font-weight: 600;
+}
+
 .ih-error {
     color: #b91c1c;
 }

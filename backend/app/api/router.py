@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.routes.applications import router as applications_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
 from app.api.routes.profile import router as profile_router
@@ -17,6 +18,7 @@ api_router.include_router(recruiters_router, tags=["recruiters"])
 api_router.include_router(resumes_router, tags=["resumes"])
 api_router.include_router(resume_feedback_router, tags=["resume-feedback"])
 api_router.include_router(recommendations_router, tags=["recommendations"])
+api_router.include_router(applications_router, tags=["applications"])
 
 api_router.include_router(
     jobs.router,

@@ -459,3 +459,53 @@ export async function updateResumeFeedbackNotes(
     body: JSON.stringify({ saved_notes: savedNotes }),
   })
 }
+
+export type JobApplicationRecord = {
+  application_id: string
+  job_source: string
+  job_external_id: string
+  status: string
+  job_title: string | null
+  job_company: string | null
+  job_location: string | null
+  job_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CreateJobApplicationPayload = {
+  job_source: string
+  job_external_id: string
+  status?: 'saved' | 'applied' | 'interview' | 'rejected' | 'offer'
+  job_title?: string | null
+  job_company?: string | null
+  job_location?: string | null
+  job_url?: string | null
+}
+
+export async function listMyApplications(): Promise<JobApplicationRecord[]> {
+  return apiJson<JobApplicationRecord[]>('/api/applications/me')
+}
+
+export async function recordJobApplication(payload: CreateJobApplicationPayload): Promise<JobApplicationRecord> {
+  return apiJson<JobApplicationRecord>('/api/applications/me', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      job_source: payload.job_source,
+      job_external_id: payload.job_external_id,
+      status: payload.status ?? 'applied',
+      job_title: payload.job_title ?? null,
+      job_company: payload.job_company ?? null,
+      job_location: payload.job_location ?? null,
+      job_url: payload.job_url ?? null,
+    }),
+  })
+}
+
+export async function deleteMyApplication(applicationId: string): Promise<void> {
+  const res = await apiFetch(`/api/applications/me/${encodeURIComponent(applicationId)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    throw new ApiError(res.status, await readErrorMessage(res))
+  }
+}

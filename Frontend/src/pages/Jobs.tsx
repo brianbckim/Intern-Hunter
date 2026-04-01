@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
+import ApplyMarkModal from '../components/ApplyMarkModal'
 import {
   ApiError,
   ensureRecommendations,
   getLatestRecommendations,
+  listMyApplications,
   listMyResumes,
+  recordJobApplication,
   tailorResumeForJob,
   type RecommendationJob,
   type RecommendationsResponse,
@@ -21,9 +24,19 @@ type Job = {
   url?: string
   date_posted?: number
   category?: string
+  source?: string
 }
 
 const PAGE_SIZE = 20
+
+type PendingApply = {
+  job_source: string
+  job_external_id: string
+  title: string
+  company: string
+  location: string
+  job_url: string | null
+}
 
 function formatDate(timestamp?: number): string {
   if (!timestamp) return ''
@@ -34,6 +47,25 @@ function normalizeCategory(category?: string): string {
   if (!category) return ''
   if (category.toLowerCase().includes('software')) return 'Software'
   return category
+}
+
+/** Must match keys used when saving via recordJobApplication / Jobs apply flow. */
+function buildAppliedKey(jobSource: string, jobExternalId: string): string {
+  return `${jobSource.trim()}|${String(jobExternalId).trim()}`
+}
+
+function appliedKeyForListing(job: Job): string {
+  const source = (job.source && job.source.trim()) || 'internhunter'
+  return buildAppliedKey(source, String(job.external_id))
+}
+
+function appliedKeyForRecommendation(job: RecommendationJob): string {
+  const source = (job.source && job.source.trim()) || 'internhunter'
+  const externalId =
+    (job.external_id && String(job.external_id).trim()) ||
+    (job.uid && String(job.uid).trim()) ||
+    'unknown'
+  return buildAppliedKey(source, externalId)
 }
 
 export default function Jobs() {
@@ -61,6 +93,37 @@ export default function Jobs() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('newest')
   const [page, setPage] = useState(1)
+
+  const [appliedKeys, setAppliedKeys] = useState<Set<string>>(() => new Set())
+  const [pendingApply, setPendingApply] = useState<PendingApply | null>(null)
+  const [showApplyModal, setShowApplyModal] = useState(false)
+  const [applyModalError, setApplyModalError] = useState<string | null>(null)
+  const [applySaving, setApplySaving] = useState(false)
+
+  const refreshAppliedKeys = useCallback(async () => {
+    try {
+      const list = await listMyApplications()
+      const next = new Set<string>()
+      for (const row of list) {
+        next.add(buildAppliedKey(row.job_source, row.job_external_id))
+      }
+      setAppliedKeys(next)
+    } catch {
+      // non-blocking: Jobs still usable if applications endpoint fails
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshAppliedKeys()
+  }, [refreshAppliedKeys])
+
+  useEffect(() => {
+    function onFocus() {
+      void refreshAppliedKeys()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refreshAppliedKeys])
 
   useEffect(() => {
     async function loadJobs() {
@@ -337,10 +400,60 @@ export default function Jobs() {
     }
   }
 
+  function openApplyModal(payload: PendingApply): void {
+    setPendingApply(payload)
+    setApplyModalError(null)
+    setShowApplyModal(true)
+  }
+
+  function closeApplyModal(): void {
+    setShowApplyModal(false)
+    setApplyModalError(null)
+    setPendingApply(null)
+  }
+
+  async function confirmMarkApplied(): Promise<void> {
+    if (!pendingApply) return
+    setApplySaving(true)
+    setApplyModalError(null)
+    try {
+      await recordJobApplication({
+        job_source: pendingApply.job_source,
+        job_external_id: pendingApply.job_external_id,
+        status: 'applied',
+        job_title: pendingApply.title,
+        job_company: pendingApply.company,
+        job_location: pendingApply.location,
+        job_url: pendingApply.job_url,
+      })
+      const key = buildAppliedKey(pendingApply.job_source, pendingApply.job_external_id)
+      setAppliedKeys((prev) => {
+        const next = new Set(prev)
+        next.add(key)
+        return next
+      })
+      setPendingApply(null)
+      setShowApplyModal(false)
+    } catch (errorValue) {
+      const message =
+        errorValue instanceof ApiError ? errorValue.message : 'Could not save application. Try again.'
+      setApplyModalError(message)
+    } finally {
+      setApplySaving(false)
+    }
+  }
+
   function renderRecommendationJob(job: RecommendationJob) {
     const tailored = tailoredResumeByUid[job.uid]
     const tailoring = tailoringByUid[job.uid] || false
     const tailoringError = tailoringErrorByUid[job.uid]
+    const recKey = appliedKeyForRecommendation(job)
+    const alreadyApplied = appliedKeys.has(recKey)
+    const source = (job.source && job.source.trim()) || 'internhunter'
+    const externalId =
+      (job.external_id && String(job.external_id).trim()) ||
+      (job.uid && String(job.uid).trim()) ||
+      'unknown'
 
     return (
       <div key={job.uid} className="ih-card" style={{ marginBottom: 14 }}>
@@ -351,15 +464,50 @@ export default function Jobs() {
           </div>
           {job.reason ? <div className="ih-muted">{job.reason}</div> : null}
 
-          <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="ih-btnPrimary" type="button" disabled={tailoring} onClick={() => void handleTailorResume(job)}>
               {tailoring ? 'Tailoring...' : 'Tailor Resume to JD'}
             </button>
-            {job.url ? (
-              <a className="ih-btnGhost" href={job.url} target="_blank" rel="noreferrer">
+            {alreadyApplied ? (
+              <span className="ih-jobAppliedPill">Applied already</span>
+            ) : job.url ? (
+              <a
+                className="ih-btnPrimary"
+                href={job.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ textDecoration: 'none', display: 'inline-block' }}
+                onClick={() =>
+                  openApplyModal({
+                    job_source: source,
+                    job_external_id: externalId,
+                    title: job.title || 'Untitled role',
+                    company: job.company || '—',
+                    location: job.location || '—',
+                    job_url: job.url?.trim() || null,
+                  })
+                }
+              >
                 Apply
               </a>
-            ) : null}
+            ) : (
+              <button
+                className="ih-btnPrimary"
+                type="button"
+                onClick={() =>
+                  openApplyModal({
+                    job_source: source,
+                    job_external_id: externalId,
+                    title: job.title || 'Untitled role',
+                    company: job.company || '—',
+                    location: job.location || '—',
+                    job_url: null,
+                  })
+                }
+              >
+                Apply
+              </button>
+            )}
           </div>
 
           {tailoringError ? <div className="ih-error" style={{ marginTop: 12 }}>{tailoringError}</div> : null}
@@ -425,6 +573,16 @@ export default function Jobs() {
 
   return (
     <AppLayout pageLabel="Jobs" activeNav="jobs">
+      <ApplyMarkModal
+        open={showApplyModal}
+        jobTitle={pendingApply?.title ?? ''}
+        company={pendingApply?.company ?? ''}
+        location={pendingApply?.location ?? ''}
+        saving={applySaving}
+        error={applyModalError}
+        onMarkApplied={() => void confirmMarkApplied()}
+        onClose={closeApplyModal}
+      />
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
@@ -534,13 +692,57 @@ export default function Jobs() {
                         </div>
                         <div className="ih-muted">Posted: {formatDate(job.date_posted) || '—'}</div>
 
-                        {job.url ? (
-                          <div style={{ marginTop: 12 }}>
-                            <a className="ih-btnGhost" href={job.url} target="_blank" rel="noreferrer">
-                              Apply
-                            </a>
-                          </div>
-                        ) : null}
+                        <div style={{ marginTop: 12 }}>
+                          {(() => {
+                            const listKey = appliedKeyForListing(job)
+                            const applied = appliedKeys.has(listKey)
+                            const source = (job.source && job.source.trim()) || 'internhunter'
+                            if (applied) {
+                              return <span className="ih-jobAppliedPill">Applied already</span>
+                            }
+                            if (job.url) {
+                              return (
+                                <a
+                                  className="ih-btnPrimary"
+                                  href={job.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ textDecoration: 'none', display: 'inline-block' }}
+                                  onClick={() =>
+                                    openApplyModal({
+                                      job_source: source,
+                                      job_external_id: String(job.external_id),
+                                      title: job.title || 'Untitled role',
+                                      company: job.company || '—',
+                                      location: job.location || '—',
+                                      job_url: job.url?.trim() || null,
+                                    })
+                                  }
+                                >
+                                  Apply
+                                </a>
+                              )
+                            }
+                            return (
+                              <button
+                                className="ih-btnPrimary"
+                                type="button"
+                                onClick={() =>
+                                  openApplyModal({
+                                    job_source: source,
+                                    job_external_id: String(job.external_id),
+                                    title: job.title || 'Untitled role',
+                                    company: job.company || '—',
+                                    location: job.location || '—',
+                                    job_url: null,
+                                  })
+                                }
+                              >
+                                Apply
+                              </button>
+                            )
+                          })()}
+                        </div>
                       </div>
                     ))}
 

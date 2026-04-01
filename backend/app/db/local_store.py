@@ -27,7 +27,14 @@ _store_path = Path(__file__).resolve().parents[2] / "data" / "dev_store.json"
 
 def _read_store() -> dict[str, Any]:
     if not _store_path.exists():
-        return {"users": [], "profiles": {}, "resumes": [], "resume_feedback": [], "recommendations_snapshots": []}
+        return {
+            "users": [],
+            "profiles": {},
+            "resumes": [],
+            "resume_feedback": [],
+            "recommendations_snapshots": [],
+            "applications": [],
+        }
 
     try:
         raw = json.loads(_store_path.read_text(encoding="utf-8"))
@@ -35,6 +42,7 @@ def _read_store() -> dict[str, Any]:
         profiles = raw.get("profiles", {})
         resume_feedback = raw.get("resume_feedback", [])
         recommendations_snapshots = raw.get("recommendations_snapshots", [])
+        applications = raw.get("applications", [])
         if not isinstance(users, list):
             users = []
         if not isinstance(profiles, dict):
@@ -46,15 +54,25 @@ def _read_store() -> dict[str, Any]:
             resume_feedback = []
         if not isinstance(recommendations_snapshots, list):
             recommendations_snapshots = []
+        if not isinstance(applications, list):
+            applications = []
         return {
             "users": users,
             "profiles": profiles,
             "resumes": resumes,
             "resume_feedback": resume_feedback,
             "recommendations_snapshots": recommendations_snapshots,
+            "applications": applications,
         }
     except Exception:
-        return {"users": [], "profiles": {}, "resumes": [], "resume_feedback": [], "recommendations_snapshots": []}
+        return {
+            "users": [],
+            "profiles": {},
+            "resumes": [],
+            "resume_feedback": [],
+            "recommendations_snapshots": [],
+            "applications": [],
+        }
 
 
 def create_recommendations_snapshot(doc: dict[str, Any]) -> str:
@@ -160,6 +178,10 @@ def delete_user_by_email(email: str) -> bool:
         store["recommendations_snapshots"] = [
             s for s in store.get("recommendations_snapshots", [])
             if str(s.get("user_email", "")).lower() != normalized
+        ]
+        store["applications"] = [
+            a for a in store.get("applications", [])
+            if str(a.get("user_email", "")).lower() != normalized
         ]
         _write_store(store)
         return True
@@ -353,3 +375,110 @@ def update_resume_feedback_notes_by_id_for_user(
                 _write_store(store)
                 return dict(updated)
     return None
+
+
+def _application_key(user_email: str, job_source: str, job_external_id: str) -> tuple[str, str, str]:
+    return (
+        user_email.strip().lower(),
+        str(job_source).strip(),
+        str(job_external_id).strip(),
+    )
+
+
+def list_applications_by_user(user_email: str, limit: int = 200) -> list[dict[str, Any]]:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        rows = [
+            dict(item)
+            for item in store.get("applications", [])
+            if str(item.get("user_email", "")).lower() == normalized
+        ]
+
+    rows.sort(key=lambda item: _safe_parse_datetime(item.get("updated_at") or item.get("created_at")), reverse=True)
+    return rows[:limit]
+
+
+def upsert_job_application_for_user(user_email: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Insert or update one application row (unique user + source + external_id)."""
+    normalized = user_email.strip().lower()
+    job_source = str(payload.get("job_source", "")).strip()
+    job_external_id = str(payload.get("job_external_id", "")).strip()
+    if not job_source or not job_external_id:
+        raise ValueError("job_source and job_external_id are required")
+
+    now = now_eastern()
+    now_iso = now.isoformat()
+
+    with _lock:
+        store = _read_store()
+        items = list(store.get("applications", []))
+        key = _application_key(normalized, job_source, job_external_id)
+
+        for index, item in enumerate(items):
+            existing_key = _application_key(
+                str(item.get("user_email", "")),
+                str(item.get("job_source", "")),
+                str(item.get("job_external_id", "")),
+            )
+            if existing_key == key:
+                merged = {
+                    **item,
+                    "status": payload.get("status", item.get("status", "applied")),
+                    "job_title": payload.get("job_title", item.get("job_title")),
+                    "job_company": payload.get("job_company", item.get("job_company")),
+                    "job_location": payload.get("job_location", item.get("job_location")),
+                    "job_url": payload.get("job_url", item.get("job_url")),
+                    "updated_at": now_iso,
+                }
+                if not merged.get("created_at"):
+                    merged["created_at"] = now_iso
+                if not merged.get("application_id"):
+                    merged["application_id"] = uuid4().hex
+                items[index] = merged
+                store["applications"] = items
+                _write_store(store)
+                return dict(merged)
+
+        application_id = uuid4().hex
+        new_row = {
+            "application_id": application_id,
+            "user_email": normalized,
+            "job_source": job_source,
+            "job_external_id": job_external_id,
+            "status": payload.get("status", "applied"),
+            "job_title": payload.get("job_title"),
+            "job_company": payload.get("job_company"),
+            "job_location": payload.get("job_location"),
+            "job_url": payload.get("job_url"),
+            "notes": payload.get("notes"),
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        items.append(new_row)
+        store["applications"] = items
+        _write_store(store)
+        return dict(new_row)
+
+
+def delete_application_by_id_for_user(application_id: str, user_email: str) -> bool:
+    """Remove one application row owned by the user (matches application_id from local store)."""
+    normalized = user_email.strip().lower()
+    needle = str(application_id).strip()
+    if not needle:
+        return False
+    with _lock:
+        store = _read_store()
+        items = list(store.get("applications", []))
+        kept: list[dict[str, Any]] = []
+        removed = False
+        for item in items:
+            if str(item.get("application_id", "")) == needle and str(item.get("user_email", "")).lower() == normalized:
+                removed = True
+                continue
+            kept.append(item)
+        if not removed:
+            return False
+        store["applications"] = kept
+        _write_store(store)
+        return True

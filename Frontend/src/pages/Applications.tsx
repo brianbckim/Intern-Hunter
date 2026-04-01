@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { ApiError, deleteMyApplication, listMyApplications, type JobApplicationRecord } from '../lib/api'
 import './Dashboard.css'
@@ -40,11 +40,14 @@ function rowMatchesQuery(row: JobApplicationRecord, q: string): boolean {
 }
 
 export default function Applications() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rows, setRows] = useState<JobApplicationRecord[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const statusFilter = searchParams.get('status')?.trim().toLowerCase() || 'all'
 
   const refresh = useCallback(async () => {
     setError(null)
@@ -70,8 +73,12 @@ export default function Applications() {
 
   const filteredRows = useMemo(() => {
     if (!rows) return []
-    return rows.filter((row) => rowMatchesQuery(row, search))
-  }, [rows, search])
+    return rows.filter((row) => {
+      const matchesQuery = rowMatchesQuery(row, search)
+      const matchesStatus = statusFilter === 'all' ? true : row.status.toLowerCase() === statusFilter
+      return matchesQuery && matchesStatus
+    })
+  }, [rows, search, statusFilter])
 
   async function handleDelete(row: JobApplicationRecord): Promise<void> {
     if (!row.application_id) return
@@ -109,6 +116,30 @@ export default function Applications() {
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search applications"
               />
+              <select
+                className="ih-input"
+                value={statusFilter}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setSearchParams((prev) => {
+                    const params = new URLSearchParams(prev)
+                    if (next === 'all') {
+                      params.delete('status')
+                    } else {
+                      params.set('status', next)
+                    }
+                    return params
+                  })
+                }}
+                aria-label="Filter application status"
+              >
+                <option value="all">All statuses</option>
+                <option value="saved">Saved jobs</option>
+                <option value="applied">Applied</option>
+                <option value="interview">Interviewing</option>
+                <option value="offer">Offers</option>
+                <option value="rejected">Rejected</option>
+              </select>
               <button className="ih-btnGhost" type="button" disabled={loading} onClick={() => void refresh()}>
                 Refresh
               </button>
@@ -122,7 +153,7 @@ export default function Applications() {
 
             {!loading && rows && rows.length === 0 && !error ? (
               <div className="ih-muted">
-                No applications yet. Open <Link to="/jobs">Jobs</Link>, click Apply on a role, then confirm with “Yes,
+                No tracked jobs yet. Open <Link to="/jobs">Jobs</Link>, then save a role or click Apply and confirm with “Yes,
                 Applied” when you return.
               </div>
             ) : null}

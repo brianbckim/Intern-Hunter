@@ -2,21 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import ApplyMarkModal from '../components/ApplyMarkModal'
+import { getAccessToken } from '../lib/auth'
 import {
   ApiError,
+  deleteMyApplication,
   ensureRecommendations,
+  ensureTailorResumeForJob,
   getLatestRecommendations,
+  getLatestTailoredResumes,
   listMyApplications,
   listMyResumes,
   recordJobApplication,
-  tailorResumeForJob,
   type RecommendationJob,
   type RecommendationsResponse,
+  type TailorResumeSnapshotResponse,
   type TailorResumeResponse,
 } from '../lib/api'
 import './Dashboard.css'
 
 type Job = {
+  uid: string
   external_id: string
   title: string
   company?: string
@@ -68,8 +73,40 @@ function appliedKeyForRecommendation(job: RecommendationJob): string {
   return buildAppliedKey(source, externalId)
 }
 
+function isTrackedAsApplied(status: string | null | undefined): boolean {
+  return status === 'applied' || status === 'interview' || status === 'offer' || status === 'rejected'
+}
+
+function applyTailoringSnapshots(
+  snapshots: TailorResumeSnapshotResponse[],
+  setters: {
+    setTailoringByUid: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+    setTailoredResumeByUid: React.Dispatch<React.SetStateAction<Record<string, TailorResumeResponse>>>
+    setTailoringErrorByUid: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  }
+): void {
+  const pending: Record<string, boolean> = {}
+  const ready: Record<string, TailorResumeResponse> = {}
+  const errors: Record<string, string> = {}
+
+  for (const snapshot of snapshots) {
+    if (snapshot.status === 'pending') {
+      pending[snapshot.job_uid] = true
+    } else if (snapshot.status === 'ready' && snapshot.data) {
+      ready[snapshot.job_uid] = snapshot.data
+    } else if (snapshot.status === 'error' && snapshot.error) {
+      errors[snapshot.job_uid] = snapshot.error
+    }
+  }
+
+  setters.setTailoringByUid(pending)
+  setters.setTailoredResumeByUid(ready)
+  setters.setTailoringErrorByUid(errors)
+}
+
 export default function Jobs() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const token = getAccessToken()
   const initialTab = searchParams.get('tab') === 'ai' ? 'ai' : 'internships'
   const [activeTab, setActiveTab] = useState<'ai' | 'internships'>(initialTab)
 
@@ -94,7 +131,7 @@ export default function Jobs() {
   const [sortBy, setSortBy] = useState('newest')
   const [page, setPage] = useState(1)
 
-  const [appliedKeys, setAppliedKeys] = useState<Set<string>>(() => new Set())
+  const [applicationRecords, setApplicationRecords] = useState<Record<string, { applicationId: string; status: string }>>({})
   const [pendingApply, setPendingApply] = useState<PendingApply | null>(null)
   const [showApplyModal, setShowApplyModal] = useState(false)
   const [applyModalError, setApplyModalError] = useState<string | null>(null)
@@ -103,11 +140,14 @@ export default function Jobs() {
   const refreshAppliedKeys = useCallback(async () => {
     try {
       const list = await listMyApplications()
-      const next = new Set<string>()
+      const next: Record<string, { applicationId: string; status: string }> = {}
       for (const row of list) {
-        next.add(buildAppliedKey(row.job_source, row.job_external_id))
+        next[buildAppliedKey(row.job_source, row.job_external_id)] = {
+          applicationId: row.application_id,
+          status: row.status,
+        }
       }
-      setAppliedKeys(next)
+      setApplicationRecords(next)
     } catch {
       // non-blocking: Jobs still usable if applications endpoint fails
     }
@@ -146,6 +186,95 @@ export default function Jobs() {
 
     void loadJobs()
   }, [])
+
+  useEffect(() => {
+    if (!token) {
+      setRecResumeId(null)
+      setTailoringByUid({})
+      setTailoredResumeByUid({})
+      setTailoringErrorByUid({})
+      return
+    }
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const resumes = await listMyResumes()
+        if (cancelled) return
+        const latestResumeId = resumes[0]?.resume_id ?? null
+        setRecResumeId(latestResumeId)
+      } catch {
+        if (!cancelled) {
+          setRecResumeId(null)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (!recResumeId) {
+      setTailoringByUid({})
+      setTailoredResumeByUid({})
+      setTailoringErrorByUid({})
+      return
+    }
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const snapshots = await getLatestTailoredResumes(recResumeId)
+        if (cancelled) return
+        applyTailoringSnapshots(snapshots, {
+          setTailoringByUid,
+          setTailoredResumeByUid,
+          setTailoringErrorByUid,
+        })
+      } catch {
+        if (!cancelled) {
+          setTailoringByUid({})
+          setTailoredResumeByUid({})
+          setTailoringErrorByUid({})
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [recResumeId])
+
+  useEffect(() => {
+    if (!recResumeId) return
+    if (!Object.values(tailoringByUid).some(Boolean)) return
+
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const snapshots = await getLatestTailoredResumes(recResumeId)
+          if (cancelled) return
+          applyTailoringSnapshots(snapshots, {
+            setTailoringByUid,
+            setTailoredResumeByUid,
+            setTailoringErrorByUid,
+          })
+        } catch {
+          // best-effort polling while generation is pending
+        }
+      })()
+    }, 1500)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [recResumeId, tailoringByUid])
 
   useEffect(() => {
     const tab = searchParams.get('tab') === 'ai' ? 'ai' : 'internships'
@@ -378,13 +507,40 @@ export default function Jobs() {
     setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: '' }))
 
     try {
-      const value = await tailorResumeForJob({ job_uid: job.uid, resume_id: recResumeId })
-      setTailoredResumeByUid((previous) => ({ ...previous, [job.uid]: value }))
+      const snapshot = await ensureTailorResumeForJob({ job_uid: job.uid, resume_id: recResumeId })
+      applyTailoringSnapshots([snapshot], {
+        setTailoringByUid: (updater) => {
+          if (typeof updater === 'function') {
+            setTailoringByUid((previous) => ({ ...previous, ...updater(previous) }))
+          } else {
+            setTailoringByUid((previous) => ({ ...previous, ...updater }))
+          }
+        },
+        setTailoredResumeByUid: (updater) => {
+          if (typeof updater === 'function') {
+            setTailoredResumeByUid((previous) => ({ ...previous, ...updater(previous) }))
+          } else {
+            setTailoredResumeByUid((previous) => ({ ...previous, ...updater }))
+          }
+        },
+        setTailoringErrorByUid: (updater) => {
+          if (typeof updater === 'function') {
+            setTailoringErrorByUid((previous) => ({ ...previous, ...updater(previous) }))
+          } else {
+            setTailoringErrorByUid((previous) => ({ ...previous, ...updater }))
+          }
+        },
+      })
     } catch (errorValue) {
       const message = errorValue instanceof Error ? errorValue.message : 'Failed to tailor resume.'
       setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: message }))
     } finally {
-      setTailoringByUid((previous) => ({ ...previous, [job.uid]: false }))
+      setTailoringByUid((previous) => {
+        if (previous[job.uid]) {
+          return previous
+        }
+        return { ...previous, [job.uid]: false }
+      })
     }
   }
 
@@ -398,6 +554,72 @@ export default function Jobs() {
     } catch {
       setTailoringErrorByUid((previous) => ({ ...previous, [jobUid]: 'Failed to copy tailored resume.' }))
     }
+  }
+
+  function renderTailoredResult(jobUid: string) {
+    const tailored = tailoredResumeByUid[jobUid]
+    const tailoringError = tailoringErrorByUid[jobUid]
+
+    return (
+      <>
+        {tailoringError ? <div className="ih-error" style={{ marginTop: 12 }}>{tailoringError}</div> : null}
+
+        {tailored ? (
+          <div
+            style={{
+              marginTop: 14,
+              border: '1px solid #d1d5db',
+              borderRadius: 10,
+              padding: 14,
+              background: '#fafafa',
+              display: 'grid',
+              gap: 12,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>Tailored Resume Draft</div>
+            <div className="ih-muted">{tailored.summary}</div>
+
+            {tailored.keywords_to_highlight.length ? (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Keywords to highlight</div>
+                <div className="ih-muted">{tailored.keywords_to_highlight.join(', ')}</div>
+              </div>
+            ) : null}
+
+            {tailored.targeted_edits.length ? (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Targeted edits</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {tailored.targeted_edits.map((item) => (
+                    <li key={item} className="ih-muted" style={{ marginBottom: 4 }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Draft</div>
+              <textarea
+                className="ih-input"
+                value={tailored.tailored_resume}
+                readOnly
+                style={{ minHeight: 260, width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+              />
+            </div>
+
+            <div>
+              <button
+                className="ih-btnGhost"
+                type="button"
+                onClick={() => void handleCopyTailoredResume(jobUid, tailored.tailored_resume)}
+              >
+                {copiedUid === jobUid ? 'Copied' : 'Copy Draft'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </>
+    )
   }
 
   function openApplyModal(payload: PendingApply): void {
@@ -427,11 +649,14 @@ export default function Jobs() {
         job_url: pendingApply.job_url,
       })
       const key = buildAppliedKey(pendingApply.job_source, pendingApply.job_external_id)
-      setAppliedKeys((prev) => {
-        const next = new Set(prev)
-        next.add(key)
-        return next
-      })
+      setApplicationRecords((prev) => ({
+        ...prev,
+        [key]: {
+          applicationId: `${pendingApply.job_source}-${pendingApply.job_external_id}`,
+          status: 'applied',
+        },
+      }))
+      void refreshAppliedKeys()
       setPendingApply(null)
       setShowApplyModal(false)
     } catch (errorValue) {
@@ -443,12 +668,43 @@ export default function Jobs() {
     }
   }
 
+  async function toggleSavedJob(payload: PendingApply): Promise<void> {
+    const key = buildAppliedKey(payload.job_source, payload.job_external_id)
+    const current = applicationRecords[key]
+
+    try {
+      if (current?.status === 'saved' && current.applicationId) {
+        await deleteMyApplication(current.applicationId)
+        setApplicationRecords((prev) => {
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+        return
+      }
+
+      await recordJobApplication({
+        job_source: payload.job_source,
+        job_external_id: payload.job_external_id,
+        status: 'saved',
+        job_title: payload.title,
+        job_company: payload.company,
+        job_location: payload.location,
+        job_url: payload.job_url,
+      })
+      void refreshAppliedKeys()
+    } catch (errorValue) {
+      const message = errorValue instanceof ApiError ? errorValue.message : 'Could not update saved job.'
+      setError(message)
+    }
+  }
+
   function renderRecommendationJob(job: RecommendationJob) {
-    const tailored = tailoredResumeByUid[job.uid]
     const tailoring = tailoringByUid[job.uid] || false
-    const tailoringError = tailoringErrorByUid[job.uid]
     const recKey = appliedKeyForRecommendation(job)
-    const alreadyApplied = appliedKeys.has(recKey)
+    const recRecord = applicationRecords[recKey]
+    const alreadyApplied = isTrackedAsApplied(recRecord?.status)
+    const isSaved = recRecord?.status === 'saved'
     const source = (job.source && job.source.trim()) || 'internhunter'
     const externalId =
       (job.external_id && String(job.external_id).trim()) ||
@@ -467,6 +723,22 @@ export default function Jobs() {
           <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="ih-btnPrimary" type="button" disabled={tailoring} onClick={() => void handleTailorResume(job)}>
               {tailoring ? 'Tailoring...' : 'Tailor Resume to JD'}
+            </button>
+            <button
+              className="ih-btnGhost"
+              type="button"
+              onClick={() =>
+                void toggleSavedJob({
+                  job_source: source,
+                  job_external_id: externalId,
+                  title: job.title || 'Untitled role',
+                  company: job.company || '—',
+                  location: job.location || '—',
+                  job_url: job.url?.trim() || null,
+                })
+              }
+            >
+              {isSaved ? 'Unsave' : 'Save Job'}
             </button>
             {alreadyApplied ? (
               <span className="ih-jobAppliedPill">Applied already</span>
@@ -509,63 +781,7 @@ export default function Jobs() {
               </button>
             )}
           </div>
-
-          {tailoringError ? <div className="ih-error" style={{ marginTop: 12 }}>{tailoringError}</div> : null}
-
-          {tailored ? (
-            <div
-              style={{
-                marginTop: 14,
-                border: '1px solid #d1d5db',
-                borderRadius: 10,
-                padding: 14,
-                background: '#fafafa',
-                display: 'grid',
-                gap: 12,
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>Tailored Resume Draft</div>
-              <div className="ih-muted">{tailored.summary}</div>
-
-              {tailored.keywords_to_highlight.length ? (
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Keywords to highlight</div>
-                  <div className="ih-muted">{tailored.keywords_to_highlight.join(', ')}</div>
-                </div>
-              ) : null}
-
-              {tailored.targeted_edits.length ? (
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Targeted edits</div>
-                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {tailored.targeted_edits.map((item) => (
-                      <li key={item} className="ih-muted" style={{ marginBottom: 4 }}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Draft</div>
-                <textarea
-                  className="ih-input"
-                  value={tailored.tailored_resume}
-                  readOnly
-                  style={{ minHeight: 260, width: '100%', resize: 'vertical', lineHeight: 1.45 }}
-                />
-              </div>
-
-              <div>
-                <button
-                  className="ih-btnGhost"
-                  type="button"
-                  onClick={() => void handleCopyTailoredResume(job.uid, tailored.tailored_resume)}
-                >
-                  {copiedUid === job.uid ? 'Copied' : 'Copy Draft'}
-                </button>
-              </div>
-            </div>
-          ) : null}
+          {renderTailoredResult(job.uid)}
         </div>
       </div>
     )
@@ -692,24 +908,46 @@ export default function Jobs() {
                         </div>
                         <div className="ih-muted">Posted: {formatDate(job.date_posted) || '—'}</div>
 
-                        <div style={{ marginTop: 12 }}>
+                        <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button
+                            className="ih-btnPrimary"
+                            type="button"
+                            disabled={tailoringByUid[job.uid] || false}
+                            onClick={() =>
+                              void handleTailorResume({
+                                uid: job.uid,
+                                source: job.source || 'internhunter',
+                                external_id: String(job.external_id),
+                                title: job.title || 'Untitled role',
+                                company: job.company || null,
+                                location: job.location || null,
+                                url: job.url || null,
+                                category: job.category || null,
+                                sponsorship: null,
+                                date_posted: job.date_posted ?? null,
+                                score: null,
+                                reason: null,
+                              })
+                            }
+                          >
+                            {tailoringByUid[job.uid] ? 'Tailoring...' : 'Tailor Resume to JD'}
+                          </button>
                           {(() => {
                             const listKey = appliedKeyForListing(job)
-                            const applied = appliedKeys.has(listKey)
+                            const record = applicationRecords[listKey]
+                            const applied = isTrackedAsApplied(record?.status)
+                            const saved = record?.status === 'saved'
                             const source = (job.source && job.source.trim()) || 'internhunter'
                             if (applied) {
                               return <span className="ih-jobAppliedPill">Applied already</span>
                             }
-                            if (job.url) {
-                              return (
-                                <a
-                                  className="ih-btnPrimary"
-                                  href={job.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{ textDecoration: 'none', display: 'inline-block' }}
+                            return (
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                <button
+                                  className="ih-btnGhost"
+                                  type="button"
                                   onClick={() =>
-                                    openApplyModal({
+                                    void toggleSavedJob({
                                       job_source: source,
                                       job_external_id: String(job.external_id),
                                       title: job.title || 'Untitled role',
@@ -719,30 +957,52 @@ export default function Jobs() {
                                     })
                                   }
                                 >
-                                  Apply
-                                </a>
-                              )
-                            }
-                            return (
-                              <button
-                                className="ih-btnPrimary"
-                                type="button"
-                                onClick={() =>
-                                  openApplyModal({
-                                    job_source: source,
-                                    job_external_id: String(job.external_id),
-                                    title: job.title || 'Untitled role',
-                                    company: job.company || '—',
-                                    location: job.location || '—',
-                                    job_url: null,
-                                  })
-                                }
-                              >
-                                Apply
-                              </button>
+                                  {saved ? 'Unsave' : 'Save Job'}
+                                </button>
+                                {job.url ? (
+                                  <a
+                                    className="ih-btnPrimary"
+                                    href={job.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ textDecoration: 'none', display: 'inline-block' }}
+                                    onClick={() =>
+                                      openApplyModal({
+                                        job_source: source,
+                                        job_external_id: String(job.external_id),
+                                        title: job.title || 'Untitled role',
+                                        company: job.company || '—',
+                                        location: job.location || '—',
+                                        job_url: job.url?.trim() || null,
+                                      })
+                                    }
+                                  >
+                                    Apply
+                                  </a>
+                                ) : (
+                                  <button
+                                    className="ih-btnPrimary"
+                                    type="button"
+                                    onClick={() =>
+                                      openApplyModal({
+                                        job_source: source,
+                                        job_external_id: String(job.external_id),
+                                        title: job.title || 'Untitled role',
+                                        company: job.company || '—',
+                                        location: job.location || '—',
+                                        job_url: null,
+                                      })
+                                    }
+                                  >
+                                    Apply
+                                  </button>
+                                )}
+                              </div>
                             )
                           })()}
                         </div>
+
+                        {renderTailoredResult(job.uid)}
                       </div>
                     ))}
 

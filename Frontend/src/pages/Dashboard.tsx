@@ -6,9 +6,12 @@ import {
     generateResumeFeedback,
     generateRecommendations,
     getResumeFeedback,
+    listMyApplications,
     listMyResumeFeedback,
     listMyResumes,
     uploadResume,
+    type JobApplicationRecord,
+    type ResumeFeedbackListItem,
     type RecommendationsResponse,
     type ResumeFeedback,
     type ResumeListItem,
@@ -38,6 +41,46 @@ function friendlyResumeError(errorValue: unknown): string {
     return 'Failed to load resume status.'
 }
 
+type ActivityItem = {
+    key: string
+    sortTime: number
+    timeLabel: string
+    text: string
+}
+
+function formatRelativeDate(iso: string): string {
+    if (!iso) return 'Recently'
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return 'Recently'
+
+    const today = new Date()
+    const toEasternDay = (value: Date) =>
+        new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/New_York',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(value)
+
+    const target = toEasternDay(date)
+    const current = toEasternDay(today)
+    if (target === current) return 'Today'
+
+    const yesterday = new Date(today)
+    yesterday.setDate(today.getDate() - 1)
+    if (target === toEasternDay(yesterday)) return 'Yesterday'
+
+    return date.toLocaleDateString('en-US', {
+        timeZone: 'America/New_York',
+        month: 'short',
+        day: 'numeric',
+    })
+}
+
+function isActionableApplicationStatus(status: string): boolean {
+    return status === 'applied' || status === 'interview' || status === 'offer'
+}
+
 export default function Dashboard() {
     const navigate = useNavigate()
     const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -54,6 +97,13 @@ export default function Dashboard() {
     const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null)
     const [loadingRecommendations, setLoadingRecommendations] = useState(false)
     const [recommendationsError, setRecommendationsError] = useState<string | null>(null)
+
+    const [applicationRows, setApplicationRows] = useState<JobApplicationRecord[] | null>(null)
+    const [loadingApplications, setLoadingApplications] = useState(true)
+    const [applicationsError, setApplicationsError] = useState<string | null>(null)
+
+    const [feedbackList, setFeedbackList] = useState<ResumeFeedbackListItem[]>([])
+    const [activityDismissed, setActivityDismissed] = useState(false)
 
     const token = getAccessToken()
     const latest = useMemo(() => (items && items.length > 0 ? items[0] : null), [items])
@@ -112,10 +162,56 @@ export default function Dashboard() {
         if (!token) {
             setFeedback(null)
             setLoadingFeedback(false)
+            setFeedbackList([])
             return
         }
         void refreshFeedback()
     }, [refreshFeedback, token])
+
+    const refreshApplications = useCallback(async () => {
+        if (!token) {
+            setApplicationRows([])
+            setLoadingApplications(false)
+            return
+        }
+
+        setApplicationsError(null)
+        setLoadingApplications(true)
+        try {
+            const rows = await listMyApplications()
+            setApplicationRows(rows)
+        } catch (e) {
+            if (e instanceof ApiError && e.status === 401) {
+                setApplicationRows([])
+            } else {
+                setApplicationsError(e instanceof Error ? e.message : 'Failed to load job tracking data.')
+            }
+        } finally {
+            setLoadingApplications(false)
+        }
+    }, [token])
+
+    useEffect(() => {
+        void refreshApplications()
+    }, [refreshApplications])
+
+    const refreshFeedbackList = useCallback(async () => {
+        if (!token) {
+            setFeedbackList([])
+            return
+        }
+
+        try {
+            const rows = await listMyResumeFeedback(5)
+            setFeedbackList(rows)
+        } catch {
+            setFeedbackList([])
+        }
+    }, [token])
+
+    useEffect(() => {
+        void refreshFeedbackList()
+    }, [refreshFeedbackList])
 
     const refreshRecommendations = useCallback(async () => {
         if (!token) {
@@ -159,10 +255,14 @@ export default function Dashboard() {
         try {
             const uploaded = await uploadResume(file)
             await refreshResumes()
+            void refreshApplications()
 
             void (async () => {
                 const feedbackPromise = generateResumeFeedback(uploaded.resume_id)
-                    .then(() => refreshFeedback())
+                    .then(async () => {
+                        await refreshFeedback()
+                        await refreshFeedbackList()
+                    })
                 const recommendationsPromise = ensureRecommendations({
                         limit: 20,
                         candidate_pool: 40,
@@ -196,29 +296,97 @@ export default function Dashboard() {
         return items.slice(0, 3)
     })()
 
-    const savedJobs = [
-        { title: "Software Engineering Intern", company: "Stripe" },
-        { title: "Backend Intern", company: "Amazon" },
-        { title: "Full Stack Intern", company: "MongoDB" },
-    ];
+    const savedJobs = useMemo(
+        () => (applicationRows ?? []).filter((row) => row.status === 'saved').slice(0, 3),
+        [applicationRows]
+    )
 
-    const applications = {
-        applied: 12,
-        interviewing: 2,
-        offers: 0,
-    };
+    const applications = useMemo(() => {
+        const rows = applicationRows ?? []
+        return {
+            applied: rows.filter((row) => row.status === 'applied').length,
+            interviewing: rows.filter((row) => row.status === 'interview').length,
+            offers: rows.filter((row) => row.status === 'offer').length,
+        }
+    }, [applicationRows])
 
-    const activity = [
-        { time: "Today", text: "Saved job: Backend Intern @ Amazon" },
-        { time: "Yesterday", text: "Submitted application: SWE Intern @ Stripe" },
-        { time: "2 days ago", text: "Uploaded resume (v3) and requested AI review" },
-    ];
+    const activity = useMemo(() => {
+        const rows: ActivityItem[] = []
 
-    const nextSteps = [
-        "Apply to 3 saved jobs this week",
-        "Add metrics to 2 resume bullets",
-        "Follow up on 2 applications older than 10 days",
-    ];
+        for (const row of applicationRows ?? []) {
+            const timestamp = row.updated_at || row.created_at
+            const company = row.job_company ? ` @ ${row.job_company}` : ''
+            let text = `Updated job tracking: ${row.job_title || 'Untitled role'}${company}`
+            if (row.status === 'saved') {
+                text = `Saved job: ${row.job_title || 'Untitled role'}${company}`
+            } else if (row.created_at === row.updated_at && isActionableApplicationStatus(row.status)) {
+                text = `Submitted application: ${row.job_title || 'Untitled role'}${company}`
+            } else if (row.status === 'interview') {
+                text = `Moved to interview stage: ${row.job_title || 'Untitled role'}${company}`
+            } else if (row.status === 'offer') {
+                text = `Received offer update: ${row.job_title || 'Untitled role'}${company}`
+            }
+
+            rows.push({
+                key: `app-${row.application_id}`,
+                sortTime: new Date(timestamp).getTime() || 0,
+                timeLabel: formatRelativeDate(timestamp),
+                text,
+            })
+        }
+
+        for (const resume of items ?? []) {
+            rows.push({
+                key: `resume-${resume.resume_id}`,
+                sortTime: new Date(resume.uploaded_at).getTime() || 0,
+                timeLabel: formatRelativeDate(resume.uploaded_at),
+                text: `Uploaded resume: ${resume.original_filename}`,
+            })
+        }
+
+        for (const entry of feedbackList) {
+            rows.push({
+                key: `feedback-${entry.feedback_id}`,
+                sortTime: new Date(entry.created_at).getTime() || 0,
+                timeLabel: formatRelativeDate(entry.created_at),
+                text: 'Generated AI resume feedback',
+            })
+        }
+
+        return rows.sort((left, right) => right.sortTime - left.sortTime).slice(0, 5)
+    }, [applicationRows, feedbackList, items])
+
+    const nextSteps = useMemo(() => {
+        const rows = applicationRows ?? []
+        const savedCount = rows.filter((row) => row.status === 'saved').length
+        const interviewingCount = rows.filter((row) => row.status === 'interview').length
+        const staleAppliedCount = rows.filter((row) => {
+            if (row.status !== 'applied') return false
+            const updated = new Date(row.updated_at || row.created_at)
+            return Date.now() - updated.getTime() > 10 * 24 * 60 * 60 * 1000
+        }).length
+
+        const steps: string[] = []
+        if (!latest) {
+            steps.push('Upload your latest resume to unlock AI feedback and recommendations.')
+        }
+        if (!feedback) {
+            steps.push('Generate AI resume feedback to catch missing metrics and role-specific gaps.')
+        }
+        if (savedCount > 0) {
+            steps.push(`Apply to ${savedCount} saved job${savedCount === 1 ? '' : 's'} this week.`)
+        }
+        if (interviewingCount > 0) {
+            steps.push(`Prepare follow-up notes for ${interviewingCount} interviewing role${interviewingCount === 1 ? '' : 's'}.`)
+        }
+        if (staleAppliedCount > 0) {
+            steps.push(`Follow up on ${staleAppliedCount} application${staleAppliedCount === 1 ? '' : 's'} older than 10 days.`)
+        }
+        if (steps.length === 0) {
+            steps.push('Browse new roles and save a few strong matches for your next application batch.')
+        }
+        return steps.slice(0, 3)
+    }, [applicationRows, feedback, latest])
 
     return (
         <AppLayout pageLabel="Dashboard" activeNav="dashboard">
@@ -365,17 +533,21 @@ export default function Dashboard() {
                                 </div>
 
                                 <div className="ih-miniList">
+                                    {loadingApplications ? <div className="ih-muted">Loading…</div> : null}
+                                    {!loadingApplications && savedJobs.length === 0 ? <div className="ih-muted">No saved jobs yet.</div> : null}
                                     {savedJobs.map((j) => (
-                                        <div key={`${j.title}-${j.company}`} className="ih-miniItem">
-                                            <div className="ih-miniTitle">{j.title}</div>
-                                            <div className="ih-muted">{j.company}</div>
+                                        <div key={j.application_id} className="ih-miniItem">
+                                            <div className="ih-miniTitle">{j.job_title || 'Untitled role'}</div>
+                                            <div className="ih-muted">{j.job_company || 'Unknown company'}</div>
                                         </div>
                                     ))}
                                 </div>
 
+                                {applicationsError ? <div className="ih-muted" style={{ marginTop: 10 }}>{applicationsError}</div> : null}
+
                                 <div className="ih-actions">
-                                    <button className="ih-btnPrimary">Browse Jobs</button>
-                                    <button className="ih-btnGhost">View Saved</button>
+                                    <button className="ih-btnPrimary" onClick={() => navigate('/jobs')}>Browse Jobs</button>
+                                    <button className="ih-btnGhost" onClick={() => navigate('/applications?status=saved')}>View Saved</button>
                                 </div>
                             </Card>
 
@@ -386,18 +558,21 @@ export default function Dashboard() {
                                     <KPI label="Offers" value={applications.offers} />
                                 </div>
 
+                                {loadingApplications ? <div className="ih-muted" style={{ marginTop: 10 }}>Loading…</div> : null}
+
                                 <div className="ih-actions">
-                                    <button className="ih-btnPrimary">Track Applications</button>
-                                    <button className="ih-btnGhost">Add Application</button>
+                                    <button className="ih-btnPrimary" onClick={() => navigate('/applications')}>Track Applications</button>
+                                    <button className="ih-btnGhost" onClick={() => navigate('/jobs')}>Add Application</button>
                                 </div>
                             </Card>
                         </div>
 
                         <Card title="Recent Activity" subtitle="Latest actions and next steps">
                             <div className="ih-activity">
+                                {activity.length === 0 ? <div className="ih-muted">No recent activity yet.</div> : null}
                                 {activity.map((a) => (
-                                    <div key={`${a.time}-${a.text}`} className="ih-activityItem">
-                                        <div className="ih-activityTime">{a.time}</div>
+                                    <div key={a.key} className="ih-activityItem">
+                                        <div className="ih-activityTime">{a.timeLabel}</div>
                                         <div>{a.text}</div>
                                     </div>
                                 ))}
@@ -406,15 +581,19 @@ export default function Dashboard() {
                             <div className="ih-divider" />
 
                             <div className="ih-subtitle">Next steps</div>
-                            <ul className="ih-list">
-                                {nextSteps.map((s) => (
-                                    <li key={s}>{s}</li>
-                                ))}
-                            </ul>
+                            {!activityDismissed ? (
+                                <ul className="ih-list">
+                                    {nextSteps.map((s) => (
+                                        <li key={s}>{s}</li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="ih-muted" style={{ marginTop: 10 }}>Plan dismissed for now. Click Create Plan to show it again.</div>
+                            )}
 
                             <div className="ih-actions">
-                                <button className="ih-btnPrimary">Create Plan</button>
-                                <button className="ih-btnGhost">Dismiss</button>
+                                <button className="ih-btnPrimary" onClick={() => setActivityDismissed(false)}>Create Plan</button>
+                                <button className="ih-btnGhost" onClick={() => setActivityDismissed(true)}>Dismiss</button>
                             </div>
                         </Card>
             </div>

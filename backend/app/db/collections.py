@@ -29,3 +29,7 @@ def applications_collection(db: AsyncIOMotorDatabase):
 
 def recommendations_snapshots_collection(db: AsyncIOMotorDatabase):
     return db["recommendations_snapshots"]
+
+
+def tailored_resume_snapshots_collection(db: AsyncIOMotorDatabase):
+    return db["tailored_resume_snapshots"]

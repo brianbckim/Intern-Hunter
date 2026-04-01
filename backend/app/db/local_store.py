@@ -33,6 +33,7 @@ def _read_store() -> dict[str, Any]:
             "resumes": [],
             "resume_feedback": [],
             "recommendations_snapshots": [],
+            "tailored_resume_snapshots": [],
             "applications": [],
         }
 
@@ -42,6 +43,7 @@ def _read_store() -> dict[str, Any]:
         profiles = raw.get("profiles", {})
         resume_feedback = raw.get("resume_feedback", [])
         recommendations_snapshots = raw.get("recommendations_snapshots", [])
+        tailored_resume_snapshots = raw.get("tailored_resume_snapshots", [])
         applications = raw.get("applications", [])
         if not isinstance(users, list):
             users = []
@@ -54,6 +56,8 @@ def _read_store() -> dict[str, Any]:
             resume_feedback = []
         if not isinstance(recommendations_snapshots, list):
             recommendations_snapshots = []
+        if not isinstance(tailored_resume_snapshots, list):
+            tailored_resume_snapshots = []
         if not isinstance(applications, list):
             applications = []
         return {
@@ -62,6 +66,7 @@ def _read_store() -> dict[str, Any]:
             "resumes": resumes,
             "resume_feedback": resume_feedback,
             "recommendations_snapshots": recommendations_snapshots,
+            "tailored_resume_snapshots": tailored_resume_snapshots,
             "applications": applications,
         }
     except Exception:
@@ -71,6 +76,7 @@ def _read_store() -> dict[str, Any]:
             "resumes": [],
             "resume_feedback": [],
             "recommendations_snapshots": [],
+            "tailored_resume_snapshots": [],
             "applications": [],
         }
 
@@ -129,6 +135,68 @@ def update_recommendations_snapshot_by_id_for_user(
     return None
 
 
+def create_tailored_resume_snapshot(doc: dict[str, Any]) -> str:
+    with _lock:
+        store = _read_store()
+        snapshot_id = uuid4().hex
+        item = {"snapshot_id": snapshot_id, **doc}
+        store.setdefault("tailored_resume_snapshots", []).append(item)
+        _write_store(store)
+        return snapshot_id
+
+
+def list_tailored_resume_snapshots_by_user(
+    user_email: str,
+    *,
+    resume_id: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        rows = [
+            dict(item)
+            for item in store.get("tailored_resume_snapshots", [])
+            if str(item.get("user_email", "")).lower() == normalized
+            and (resume_id is None or str(item.get("resume_id")) == str(resume_id))
+        ]
+
+    rows.sort(key=lambda item: _safe_parse_datetime(item.get("updated_at") or item.get("created_at")), reverse=True)
+    return rows[:limit]
+
+
+def get_latest_tailored_resume_snapshot_for_user(
+    user_email: str,
+    *,
+    resume_id: str,
+    job_uid: str,
+) -> dict[str, Any] | None:
+    rows = list_tailored_resume_snapshots_by_user(user_email, resume_id=resume_id, limit=200)
+    for item in rows:
+        if str(item.get("job_uid")) == str(job_uid):
+            return item
+    return None
+
+
+def update_tailored_resume_snapshot_by_id_for_user(
+    snapshot_id: str,
+    user_email: str,
+    updates: dict[str, Any],
+) -> dict[str, Any] | None:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        items = store.get("tailored_resume_snapshots", [])
+        for index, item in enumerate(items):
+            if str(item.get("snapshot_id", "")) == snapshot_id and str(item.get("user_email", "")).lower() == normalized:
+                updated = {**item, **updates}
+                items[index] = updated
+                store["tailored_resume_snapshots"] = items
+                _write_store(store)
+                return dict(updated)
+    return None
+
+
 def _write_store(data: dict[str, Any]) -> None:
     _store_path.parent.mkdir(parents=True, exist_ok=True)
     _store_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -177,6 +245,10 @@ def delete_user_by_email(email: str) -> bool:
         ]
         store["recommendations_snapshots"] = [
             s for s in store.get("recommendations_snapshots", [])
+            if str(s.get("user_email", "")).lower() != normalized
+        ]
+        store["tailored_resume_snapshots"] = [
+            s for s in store.get("tailored_resume_snapshots", [])
             if str(s.get("user_email", "")).lower() != normalized
         ]
         store["applications"] = [
@@ -303,6 +375,23 @@ def delete_recommendations_snapshots_by_resume_id_for_user(resume_id: str, user_
             else:
                 kept.append(item)
         store["recommendations_snapshots"] = kept
+        _write_store(store)
+        return removed
+
+
+def delete_tailored_resume_snapshots_by_resume_id_for_user(resume_id: str, user_email: str) -> int:
+    normalized = user_email.strip().lower()
+    with _lock:
+        store = _read_store()
+        items = list(store.get("tailored_resume_snapshots", []))
+        kept: list[dict[str, Any]] = []
+        removed = 0
+        for item in items:
+            if str(item.get("user_email", "")).lower() == normalized and str(item.get("resume_id")) == str(resume_id):
+                removed += 1
+            else:
+                kept.append(item)
+        store["tailored_resume_snapshots"] = kept
         _write_store(store)
         return removed
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type Language = 'en' | 'es' | 'fr'
+export type Language = 'en' | 'es' | 'fr' | 'ko'
 
 type LanguageStore = {
   language: Language
@@ -14,7 +14,7 @@ function getSavedLanguage(): Language {
 
   const saved = window.localStorage.getItem(LANG_STORAGE_KEY)
 
-  if (saved === 'es' || saved === 'fr') return saved
+  if (saved === 'es' || saved === 'fr' || saved === 'ko') return saved
 
   return 'en'
 }

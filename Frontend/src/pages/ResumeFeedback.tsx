@@ -14,16 +14,18 @@ import {
   type ResumeFeedback,
   type ResumeDetail,
 } from '../lib/api'
+import { useUiText } from '../lib/uiLanguage'
 import './Dashboard.css'
 
-function normalizeError(errorValue: unknown): string {
+function normalizeError(errorValue: unknown, ui: (english: string, korean: string) => string): string {
   if (errorValue instanceof ApiError) return errorValue.message
   if (errorValue instanceof Error) return errorValue.message
-  return 'Something went wrong while generating feedback.'
+  return ui('Something went wrong while generating feedback.', '피드백 생성 중 문제가 발생했습니다.')
 }
 
 export default function ResumeFeedbackPage() {
   const navigate = useNavigate()
+  const { ui } = useUiText()
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<ResumeFeedback | null>(null)
   const [latestResumeId, setLatestResumeId] = useState<string | null>(null)
@@ -95,11 +97,11 @@ export default function ResumeFeedbackPage() {
       setFeedback(detail)
       setNotes('')
     } catch (errorValue) {
-      setError(normalizeError(errorValue))
+      setError(normalizeError(errorValue, ui))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [navigate, ui])
 
   useEffect(() => {
     if (!waitingForResumeId) return
@@ -241,10 +243,10 @@ export default function ResumeFeedbackPage() {
       const updated = await updateResumeFeedbackNotes(feedbackId, text)
       setFeedback(updated)
       setNotes('')
-      setSuccess('Notes saved.')
+      setSuccess(ui('Notes saved.', '메모가 저장되었습니다.'))
       void loadHistory()
     } catch (errorValue) {
-      setError(normalizeError(errorValue))
+      setError(normalizeError(errorValue, ui))
     } finally {
       setSavingNotes(false)
     }
@@ -262,14 +264,14 @@ export default function ResumeFeedbackPage() {
       anchor.remove()
       URL.revokeObjectURL(url)
     } catch (errorValue) {
-      setError(normalizeError(errorValue))
+      setError(normalizeError(errorValue, ui))
     }
   }
 
   async function handleDeleteResume(resumeId: string, resumeFilename: string) {
     if (deletingResumeId) return
 
-    const ok = window.confirm(`Delete this resume and its feedback history?\n\n${resumeFilename}`)
+    const ok = window.confirm(ui(`Delete this resume and its feedback history?\n\n${resumeFilename}`, `이 이력서와 피드백 기록을 삭제할까요?\n\n${resumeFilename}`))
     if (!ok) return
 
     setDeletingResumeId(resumeId)
@@ -278,44 +280,44 @@ export default function ResumeFeedbackPage() {
 
     try {
       await deleteResume(resumeId)
-      setSuccess('Deleted resume history.')
+      setSuccess(ui('Deleted resume history.', '이력서 기록이 삭제되었습니다.'))
       await loadLatest()
       await loadHistory()
     } catch (errorValue) {
-      setError(normalizeError(errorValue))
+      setError(normalizeError(errorValue, ui))
     } finally {
       setDeletingResumeId(null)
     }
   }
 
   return (
-    <AppLayout pageLabel="AI Resume Feedback" activeNav="resume">
+    <AppLayout pageLabel={ui('AI Resume Feedback', 'AI 이력서 피드백')} activeNav="resume">
       <div className="ih-grid">
         <div className="ih-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
           <Link className="ih-btnGhost" to="/resume?from=resume-feedback">
-            Resume
+            {ui('Resume', '이력서')}
           </Link>
           <Link className="ih-btnPrimary" to="/resume-feedback">
-            AI Feedback
+            {ui('AI Feedback', 'AI 피드백')}
           </Link>
         </div>
 
-        <Card title="AI Resume Feedback" subtitle="Strong points, areas to improve, and suggested edits">
-          {loading ? <p className="ih-muted">Loading…</p> : null}
+        <Card title={ui('AI Resume Feedback', 'AI 이력서 피드백')} subtitle={ui('Strong points, areas to improve, and suggested edits', '강점, 개선점, 추천 수정을 확인하세요')}>
+          {loading ? <p className="ih-muted">{ui('Loading…', '불러오는 중…')}</p> : null}
           {error ? <p className="ih-error">{error}</p> : null}
           {success ? <p className="ih-success">{success}</p> : null}
 
           {!loading && waitingForResumeId ? (
-            <p className="ih-muted">Generating feedback for your latest resume…</p>
+            <p className="ih-muted">{ui('Generating feedback for your latest resume…', '최신 이력서 피드백을 생성하는 중입니다…')}</p>
           ) : null}
 
           {!loading && !hasFeedback ? (
             <div className="ih-muted">
               {latestResumeId
-                ? 'No feedback for your latest resume yet. If you just uploaded, this page will update automatically when generation completes.'
+                ? ui('No feedback for your latest resume yet. If you just uploaded, this page will update automatically when generation completes.', '최신 이력서에 대한 피드백이 아직 없습니다. 방금 업로드했다면 생성이 끝나면 이 페이지가 자동으로 업데이트됩니다.')
                 : (
                     <>
-                      No feedback yet. Upload your resume first on <Link to="/resume">Resume</Link>, then return here.
+                      {ui('No feedback yet. Upload your resume first on ', '아직 피드백이 없습니다. 먼저 ')}<Link to="/resume">{ui('Resume', '이력서')}</Link>{ui(' and then return here.', '에서 이력서를 업로드한 뒤 다시 오세요.')}
                     </>
                   )}
             </div>
@@ -323,14 +325,14 @@ export default function ResumeFeedbackPage() {
 
           {feedback?.summary ? (
             <div style={{ marginTop: 10 }}>
-              <div className="ih-subtitle">Summary</div>
+              <div className="ih-subtitle">{ui('Summary', '요약')}</div>
               <div>{feedback.summary}</div>
             </div>
           ) : null}
 
           <div className="ih-twoCol" style={{ marginTop: 14 }}>
             <div className="ih-card" style={{ border: 'none', boxShadow: 'none' }}>
-              <div className="ih-subtitle">Strong points</div>
+              <div className="ih-subtitle">{ui('Strong points', '강점')}</div>
               {strongPoints.length ? (
                 <ul className="ih-list">{strongPoints.map((item) => (
                   <li key={item}>{item}</li>
@@ -340,7 +342,7 @@ export default function ResumeFeedbackPage() {
               )}
 
               <div className="ih-subtitle" style={{ marginTop: 14 }}>
-                Areas to improve
+                {ui('Areas to improve', '개선할 점')}
               </div>
               {areasToImprove.length ? (
                 <ul className="ih-list">{areasToImprove.map((item) => (
@@ -352,7 +354,7 @@ export default function ResumeFeedbackPage() {
             </div>
 
             <div className="ih-card" style={{ border: 'none', boxShadow: 'none' }}>
-              <div className="ih-subtitle">Suggested edits</div>
+              <div className="ih-subtitle">{ui('Suggested edits', '추천 수정사항')}</div>
               {suggestedEdits.length ? (
                 <ul className="ih-list">{suggestedEdits.map((item) => (
                   <li key={item}>{item}</li>
@@ -366,7 +368,7 @@ export default function ResumeFeedbackPage() {
           <div className="ih-divider" />
 
           <div style={{ marginTop: 10 }}>
-            <div className="ih-subtitle">Skill Gaps / Suggestions</div>
+            <div className="ih-subtitle">{ui('Skill Gaps / Suggestions', '기술 격차 / 제안')}</div>
             {skillGaps.length ? (
               <ul className="ih-list">{skillGaps.map((item) => (
                 <li key={item}>{item}</li>
@@ -378,18 +380,18 @@ export default function ResumeFeedbackPage() {
 
           <div className="ih-divider" />
 
-          <div className="ih-subtitle">Notes</div>
+          <div className="ih-subtitle">{ui('Notes', '메모')}</div>
           <textarea
             className="ih-input"
             rows={5}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
-            placeholder="Add a note for this feedback..."
+            placeholder={ui('Add a note for this feedback...', '이 피드백에 대한 메모를 남기세요...')}
           />
 
           {notesHistory.length ? (
             <div style={{ marginTop: 10 }}>
-              <div className="ih-muted">Saved notes (oldest → newest)</div>
+              <div className="ih-muted">{ui('Saved notes (oldest → newest)', '저장된 메모 (오래된 순 → 최신 순)')}</div>
               <ul className="ih-list">
                 {notesHistory.map((item, index) => (
                   <li key={`${item.created_at}-${index}`}>{item.text}</li>
@@ -404,16 +406,16 @@ export default function ResumeFeedbackPage() {
               disabled={!feedbackId || savingNotes || !notes.trim()}
               onClick={() => void handleSaveNotes()}
             >
-              {savingNotes ? 'Saving…' : 'Save Notes'}
+              {savingNotes ? ui('Saving…', '저장 중…') : ui('Save Notes', '메모 저장')}
             </button>
           </div>
         </Card>
 
-        <Card title="Resume Feedback History" subtitle="Grouped by resume version (newest at top)">
-          {loadingHistory ? <div className="ih-muted">Loading history…</div> : null}
+        <Card title={ui('Resume Feedback History', '이력서 피드백 기록')} subtitle={ui('Grouped by resume version (newest at top)', '이력서 버전별로 그룹화됨 (최신 순)')}>
+          {loadingHistory ? <div className="ih-muted">{ui('Loading history…', '기록 불러오는 중…')}</div> : null}
 
           {!loadingHistory && historyGroups.length === 0 ? (
-            <div className="ih-muted">No feedback history yet.</div>
+            <div className="ih-muted">{ui('No feedback history yet.', '아직 피드백 기록이 없습니다.')}</div>
           ) : null}
 
           {!loadingHistory
@@ -422,7 +424,7 @@ export default function ResumeFeedbackPage() {
                   <div className="ih-row" style={{ alignItems: 'center' }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{group.resumeFilename}</div>
-                      <div className="ih-muted">{group.feedbackItems.length} feedback snapshot(s)</div>
+                      <div className="ih-muted">{ui(`${group.feedbackItems.length} feedback snapshot(s)`, `피드백 스냅샷 ${group.feedbackItems.length}개`)}</div>
                     </div>
 
                     {group.resumeId ? (
@@ -433,7 +435,7 @@ export default function ResumeFeedbackPage() {
                           disabled={Boolean(deletingResumeId)}
                           onClick={() => void handleDownloadResume(group.resumeId!)}
                         >
-                          Download Resume
+                          {ui('Download Resume', '이력서 다운로드')}
                         </button>
                         <button
                           className="ih-btnGhost"
@@ -441,7 +443,7 @@ export default function ResumeFeedbackPage() {
                           disabled={Boolean(deletingResumeId)}
                           onClick={() => void handleDeleteResume(group.resumeId!, group.resumeFilename)}
                         >
-                          {deletingResumeId === group.resumeId ? 'Deleting…' : 'Delete'}
+                          {deletingResumeId === group.resumeId ? ui('Deleting…', '삭제 중…') : ui('Delete', '삭제')}
                         </button>
                       </div>
                     ) : null}
@@ -461,36 +463,36 @@ export default function ResumeFeedbackPage() {
                       return (
                         <div key={item.feedbackId} style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
                           <div className="ih-muted" style={{ marginBottom: 6 }}>
-                            feedback_id: <strong>{item.feedbackId}</strong> · created_at: <strong>{fb.created_at}</strong>
+                            feedback_id: <strong>{item.feedbackId}</strong> · {ui('created_at', '생성 시각')}: <strong>{fb.created_at}</strong>
                           </div>
 
                           {fb.summary ? (
                             <div style={{ marginBottom: 8 }}>
-                              <div className="ih-subtitle">Summary</div>
+                              <div className="ih-subtitle">{ui('Summary', '요약')}</div>
                               <div>{fb.summary}</div>
                             </div>
                           ) : null}
 
                           <div className="ih-twoCol">
                             <div>
-                              <div className="ih-subtitle">Strong points</div>
+                              <div className="ih-subtitle">{ui('Strong points', '강점')}</div>
                               {fb.strong_points?.length ? <ul className="ih-list">{fb.strong_points.map((t) => <li key={t}>{t}</li>)}</ul> : <div className="ih-muted">—</div>}
 
-                              <div className="ih-subtitle" style={{ marginTop: 10 }}>Areas to improve</div>
+                              <div className="ih-subtitle" style={{ marginTop: 10 }}>{ui('Areas to improve', '개선할 점')}</div>
                               {fb.areas_to_improve?.length ? <ul className="ih-list">{fb.areas_to_improve.map((t) => <li key={t}>{t}</li>)}</ul> : <div className="ih-muted">—</div>}
                             </div>
 
                             <div>
-                              <div className="ih-subtitle">Suggested edits</div>
+                              <div className="ih-subtitle">{ui('Suggested edits', '추천 수정사항')}</div>
                               {fb.suggested_edits?.length ? <ul className="ih-list">{fb.suggested_edits.map((t) => <li key={t}>{t}</li>)}</ul> : <div className="ih-muted">—</div>}
 
-                              <div className="ih-subtitle" style={{ marginTop: 10 }}>Skill Gaps / Suggestions</div>
+                              <div className="ih-subtitle" style={{ marginTop: 10 }}>{ui('Skill Gaps / Suggestions', '기술 격차 / 제안')}</div>
                               {fb.skill_gaps?.length ? <ul className="ih-list">{fb.skill_gaps.map((t) => <li key={t}>{t}</li>)}</ul> : <div className="ih-muted">—</div>}
                             </div>
                           </div>
 
                           <div style={{ marginTop: 10 }}>
-                            <div className="ih-subtitle">Notes</div>
+                            <div className="ih-subtitle">{ui('Notes', '메모')}</div>
                             {noteItems.length ? <ul className="ih-list">{noteItems.map((t, idx) => <li key={`${idx}-${t}`}>{t}</li>)}</ul> : <div className="ih-muted">—</div>}
                           </div>
                         </div>

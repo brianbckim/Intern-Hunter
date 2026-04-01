@@ -1,4 +1,5 @@
 import './ApplyMarkModal.css'
+import { useUiText } from '../lib/uiLanguage'
 
 export type ApplyMarkModalProps = {
   open: boolean
@@ -21,6 +22,7 @@ export default function ApplyMarkModal({
   onMarkApplied,
   onClose,
 }: ApplyMarkModalProps) {
+  const { ui } = useUiText()
   if (!open) return null
 
   return (
@@ -37,18 +39,20 @@ export default function ApplyMarkModal({
         <button
           type="button"
           className="ih-applyMark-closeX"
-          aria-label="Close"
+          aria-label={ui('Close', '닫기')}
           disabled={saving}
           onClick={onClose}
         >
           ×
         </button>
         <h2 id="ih-apply-mark-title" className="ih-applyMark-title">
-          Track this application
+          {ui('Track this application', '이 지원 내역 추적하기')}
         </h2>
         <p className="ih-applyMark-lead">
-          Complete your application on the employer site (opened in a new tab when available). When you are finished,
-          save it to your tracker below.
+          {ui(
+            'Complete your application on the employer site (opened in a new tab when available). When you are finished, save it to your tracker below.',
+            '기업 사이트에서 지원을 완료한 뒤, 아래에서 이 내역을 추적 목록에 저장하세요. 가능하면 새 탭에서 열립니다.'
+          )}
         </p>
         <div className="ih-applyMark-job">
           <div className="ih-applyMark-jobTitle">{jobTitle}</div>
@@ -59,10 +63,10 @@ export default function ApplyMarkModal({
         {error ? <p className="ih-error ih-applyMark-error">{error}</p> : null}
         <div className="ih-applyMark-actions">
           <button className="ih-btnPrimary" type="button" disabled={saving} onClick={onMarkApplied}>
-            {saving ? 'Saving…' : 'Applied'}
+            {saving ? ui('Saving…', '저장 중…') : ui('Applied', '지원 완료')}
           </button>
           <button className="ih-btnGhost" type="button" disabled={saving} onClick={onClose}>
-            Close
+            {ui('Close', '닫기')}
           </button>
         </div>
       </div>

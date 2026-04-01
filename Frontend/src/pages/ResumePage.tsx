@@ -17,6 +17,7 @@ import {
 } from '../lib/api'
 import ResumePreview from './ResumePreview'
 import ResumeUpload from './ResumeUpload'
+import { useUiText } from '../lib/uiLanguage'
 import './ResumePage.css'
 
 function cleanExtractedPreview(value: string | null | undefined): string | null {
@@ -65,26 +66,27 @@ function cleanExtractedPreview(value: string | null | undefined): string | null 
   return cleaned.join('\n') || null
 }
 
-function friendlyErrorMessage(errorValue: unknown): string {
+function friendlyErrorMessage(errorValue: unknown, ui: (english: string, korean: string) => string): string {
   if (errorValue instanceof ApiError) {
-    if (errorValue.status === 401) return 'You are not authorized. Please log in again.'
-    if (errorValue.status === 400) return errorValue.message || 'Invalid file. Please upload PDF/DOC/DOCX only.'
+    if (errorValue.status === 401) return ui('You are not authorized. Please log in again.', '권한이 없습니다. 다시 로그인해 주세요.')
+    if (errorValue.status === 400) return errorValue.message || ui('Invalid file. Please upload PDF/DOC/DOCX only.', '잘못된 파일입니다. PDF/DOC/DOCX만 업로드해 주세요.')
     return errorValue.message
   }
 
   if (errorValue instanceof Error) {
     if (errorValue.message.includes('MongoDB is not configured')) {
-      return 'Resume database is unavailable right now. Please start MongoDB or use backend fallback with latest code.'
+      return ui('Resume database is unavailable right now. Please start MongoDB or use backend fallback with latest code.', '현재 이력서 데이터베이스를 사용할 수 없습니다. MongoDB를 시작하거나 최신 백엔드 fallback을 사용해 주세요.')
     }
     return errorValue.message
   }
 
-  return 'Something went wrong while processing resume.'
+  return ui('Something went wrong while processing resume.', '이력서 처리 중 문제가 발생했습니다.')
 }
 
 export default function ResumePage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { ui } = useUiText()
   const [resumeId, setResumeId] = useState<string | null>(null)
   const [resumeDetail, setResumeDetail] = useState<ResumeDetail | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
@@ -94,7 +96,7 @@ export default function ResumePage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [emptyPreviewMessage, setEmptyPreviewMessage] = useState<string>('No preview available yet. Upload a file to start.')
+  const [emptyPreviewMessage, setEmptyPreviewMessage] = useState<string>(ui('No preview available yet. Upload a file to start.', '아직 미리보기가 없습니다. 파일을 업로드해 시작하세요.'))
 
   function formatDate(isoOrDate: string | null | undefined): string {
     if (!isoOrDate) return '—'
@@ -164,14 +166,14 @@ export default function ResumePage() {
             setEmptyPreviewMessage('')
           } else {
             setEmptyPreviewMessage(
-              'Inline preview is unavailable for this Word file. Use Download File to open it in Microsoft Word.'
+              ui('Inline preview is unavailable for this Word file. Use Download File to open it in Microsoft Word.', '이 Word 파일은 화면 내 미리보기를 지원하지 않습니다. 파일 다운로드로 Microsoft Word에서 열어 주세요.')
             )
           }
         }
       }
       return detail
     } catch (errorValue) {
-      setError(friendlyErrorMessage(errorValue))
+      setError(friendlyErrorMessage(errorValue, ui))
       return null
     } finally {
       setLoadingPreview(false)
@@ -198,7 +200,7 @@ export default function ResumePage() {
 
         setResumeId(existingResumeId)
       } catch (errorValue) {
-        setError(friendlyErrorMessage(errorValue))
+        setError(friendlyErrorMessage(errorValue, ui))
       }
     }
 
@@ -212,9 +214,9 @@ export default function ResumePage() {
       setResumeDetail(null)
       setPdfUrl(null)
       setDocHtml(null)
-      setEmptyPreviewMessage('No preview available yet. Upload a file to start.')
+      setEmptyPreviewMessage(ui('No preview available yet. Upload a file to start.', '아직 미리보기가 없습니다. 파일을 업로드해 시작하세요.'))
     }
-  }, [loadResumePreview, resumeId])
+  }, [loadResumePreview, resumeId, ui])
 
   useEffect(() => {
     return () => {
@@ -237,7 +239,7 @@ export default function ResumePage() {
         setUploadProgress(percent)
       })
       setResumeId(response.resume_id)
-      setSuccess('Resume uploaded successfully.')
+      setSuccess(ui('Resume uploaded successfully.', '이력서가 업로드되었습니다.'))
 
       // Start feedback and recommendations in parallel after upload.
       void (async () => {
@@ -252,7 +254,7 @@ export default function ResumePage() {
         await Promise.allSettled([feedbackPromise, recommendationsPromise])
       })()
     } catch (errorValue) {
-      setError(friendlyErrorMessage(errorValue))
+      setError(friendlyErrorMessage(errorValue, ui))
     } finally {
       setUploading(false)
     }
@@ -271,19 +273,19 @@ export default function ResumePage() {
       anchor.remove()
       URL.revokeObjectURL(url)
     } catch (errorValue) {
-      setError(friendlyErrorMessage(errorValue))
+      setError(friendlyErrorMessage(errorValue, ui))
     }
   }
 
   return (
-    <AppLayout pageLabel="Resume Upload" activeNav="resume">
+    <AppLayout pageLabel={ui('Resume Upload', '이력서 업로드')} activeNav="resume">
       <div className="ih-grid">
         <div className="ih-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
           <Link className="ih-btnPrimary" to="/resume">
-            Resume
+            {ui('Resume', '이력서')}
           </Link>
           <Link className="ih-btnGhost" to="/resume-feedback">
-            AI Feedback
+            {ui('AI Feedback', 'AI 피드백')}
           </Link>
         </div>
 
@@ -305,16 +307,16 @@ export default function ResumePage() {
             try {
               await reextractResume(resumeId)
             } catch (errorValue) {
-              setError(friendlyErrorMessage(errorValue))
+              setError(friendlyErrorMessage(errorValue, ui))
               return
             }
 
             const detail = await loadResumePreview(resumeId)
             if (!detail) return
             if (detail.extracted_text || detail.original_filename.toLowerCase().endsWith('.pdf')) {
-              setSuccess('Resume analyzed and preview updated.')
+              setSuccess(ui('Resume analyzed and preview updated.', '이력서 분석이 완료되었고 미리보기가 업데이트되었습니다.'))
             } else {
-              setSuccess('Resume uploaded, but preview text is unavailable for this file type.')
+              setSuccess(ui('Resume uploaded, but preview text is unavailable for this file type.', '이력서는 업로드되었지만 이 파일 형식은 텍스트 미리보기를 지원하지 않습니다.'))
             }
           }}
         />

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import AppLayout from '../components/AppLayout'
 import { searchRecruiters, type RecruiterSearchRequest, type RecruiterSearchResponse } from '../lib/api'
+import { useUiText } from '../lib/uiLanguage'
 import './Dashboard.css'
 
 type FieldKey = 'name' | 'locality' | 'region' | 'country'
@@ -21,6 +22,7 @@ function normalizeUrl(value: string | null | undefined): string | null {
 }
 
 export default function Recruiters() {
+  const { ui } = useUiText()
   const [filters, setFilters] = useState<Record<FieldKey, string>>({
     name: '',
     locality: '',
@@ -96,7 +98,7 @@ export default function Recruiters() {
       })
       .catch((errorValue) => {
         if (cancelled) return
-        setError(errorValue instanceof Error ? errorValue.message : 'Failed to load recruiters.')
+        setError(errorValue instanceof Error ? errorValue.message : ui('Failed to load recruiters.', '리크루터 목록을 불러오지 못했습니다.'))
         setData(null)
       })
       .finally(() => {
@@ -117,13 +119,13 @@ export default function Recruiters() {
   }, [data, page])
 
   return (
-    <AppLayout pageLabel="Recruiters" activeNav="recruiters">
+    <AppLayout pageLabel={ui('Recruiters', '리크루터')} activeNav="recruiters">
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Recruiters Search</div>
+            <div className="ih-cardTitle">{ui('Recruiters Search', '리크루터 검색')}</div>
             <div className="ih-muted">
-              Search by name, locality, region, and country. Select multiple fields and combine filters.
+              {ui('Search by name, locality, region, and country. Select multiple fields and combine filters.', '이름, 지역, 주, 국가로 검색할 수 있습니다. 여러 필드를 선택해 함께 필터링하세요.')}
             </div>
           </div>
 
@@ -140,7 +142,7 @@ export default function Recruiters() {
                           setEnabledFields((prev) => ({ ...prev, [field.key]: event.target.checked }))
                         }
                       />
-                      <span>Search by {field.label}</span>
+                      <span>{ui('Search by', '검색 기준')} {field.label === 'Name' ? ui('Name', '이름') : field.label === 'Locality' ? ui('Locality', '도시') : field.label === 'Region' ? ui('Region', '주/지역') : ui('Country', '국가')}</span>
                     </div>
                     <input
                       className="ih-input"
@@ -160,16 +162,16 @@ export default function Recruiters() {
 
               {activeFieldCount === 0 ? (
                 <div className="ih-muted" style={{ marginTop: 10 }}>
-                  Select at least one field to search.
+                  {ui('Select at least one field to search.', '검색할 필드를 하나 이상 선택하세요.')}
                 </div>
               ) : null}
 
               <div className="ih-actions">
                 <button className="ih-btnPrimary" type="submit" disabled={activeFieldCount === 0}>
-                  Search
+                  {ui('Search', '검색')}
                 </button>
                 <button className="ih-btnGhost" type="button" onClick={handleClear}>
-                  Clear
+                  {ui('Clear', '초기화')}
                 </button>
               </div>
             </form>
@@ -178,18 +180,18 @@ export default function Recruiters() {
 
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Results</div>
+            <div className="ih-cardTitle">{ui('Results', '결과')}</div>
             <div className="ih-muted">
-              {hasSearched ? `Total: ${data?.total ?? 0}` : 'Run a search to see recruiters.'}
+              {hasSearched ? `${ui('Total', '총합')}: ${data?.total ?? 0}` : ui('Run a search to see recruiters.', '검색을 실행하면 리크루터 결과가 표시됩니다.')}
             </div>
           </div>
 
           <div className="ih-cardBody">
-            {loading ? <div className="ih-muted">Loading...</div> : null}
+            {loading ? <div className="ih-muted">{ui('Loading...', '불러오는 중...')}</div> : null}
             {error ? <div className="ih-error">{error}</div> : null}
 
             {!loading && hasSearched && data && data.items.length === 0 ? (
-              <div className="ih-muted">No recruiters matched your search.</div>
+              <div className="ih-muted">{ui('No recruiters matched your search.', '조건에 맞는 리크루터가 없습니다.')}</div>
             ) : null}
 
             {!loading && data && data.items.length ? (
@@ -197,12 +199,12 @@ export default function Recruiters() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>Name</th>
-                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>Locality</th>
-                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>Region</th>
-                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>Country</th>
+                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>{ui('Name', '이름')}</th>
+                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>{ui('Locality', '도시')}</th>
+                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>{ui('Region', '주/지역')}</th>
+                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>{ui('Country', '국가')}</th>
                       <th style={{ textAlign: 'left', padding: '10px 8px' }}>LinkedIn</th>
-                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>Website</th>
+                      <th style={{ textAlign: 'left', padding: '10px 8px' }}>{ui('Website', '웹사이트')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -211,26 +213,26 @@ export default function Recruiters() {
                       const website = normalizeUrl(item.website)
                       return (
                         <tr key={`${item.name ?? 'recruiter'}-${index}`} style={{ borderTop: '1px solid #e5e7eb' }}>
-                          <td style={{ padding: '10px 8px' }}>{item.name ?? 'N/A'}</td>
-                          <td style={{ padding: '10px 8px' }}>{item.locality ?? 'N/A'}</td>
-                          <td style={{ padding: '10px 8px' }}>{item.region ?? 'N/A'}</td>
-                          <td style={{ padding: '10px 8px' }}>{item.country ?? 'N/A'}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.name ?? ui('N/A', '없음')}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.locality ?? ui('N/A', '없음')}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.region ?? ui('N/A', '없음')}</td>
+                          <td style={{ padding: '10px 8px' }}>{item.country ?? ui('N/A', '없음')}</td>
                           <td style={{ padding: '10px 8px' }}>
                             {linkedIn ? (
                               <a className="ih-btnGhost" href={linkedIn} target="_blank" rel="noreferrer">
-                                View
+                                {ui('View', '보기')}
                               </a>
                             ) : (
-                              'N/A'
+                              ui('N/A', '없음')
                             )}
                           </td>
                           <td style={{ padding: '10px 8px' }}>
                             {website ? (
                               <a className="ih-btnGhost" href={website} target="_blank" rel="noreferrer">
-                                Visit
+                                {ui('Visit', '방문')}
                               </a>
                             ) : (
-                              'N/A'
+                              ui('N/A', '없음')
                             )}
                           </td>
                         </tr>
@@ -245,11 +247,11 @@ export default function Recruiters() {
               <div style={{ marginTop: 16 }}>
                 <div className="ih-row">
                   <div className="ih-muted">
-                    Page {data?.page ?? page} of {data?.pages ?? 1}
+                    {ui('Page', '페이지')} {data?.page ?? page} {ui('of', '/')} {data?.pages ?? 1}
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      Rows per page
+                      {ui('Rows per page', '페이지당 행 수')}
                       <select
                         className="ih-input"
                         style={{ width: 120 }}
@@ -277,7 +279,7 @@ export default function Recruiters() {
                       disabled={page <= 1 || loading}
                       onClick={() => setPage((current) => clampPage(current - 1, data?.pages ?? 1))}
                     >
-                      Previous
+                      {ui('Previous', '이전')}
                     </button>
                     <button
                       className="ih-btnGhost"
@@ -285,12 +287,12 @@ export default function Recruiters() {
                       disabled={page >= (data?.pages ?? 1) || loading}
                       onClick={() => setPage((current) => clampPage(current + 1, data?.pages ?? 1))}
                     >
-                      Next
+                      {ui('Next', '다음')}
                     </button>
                   </div>
 
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    Go to page
+                    {ui('Go to page', '페이지 이동')}
                     <input
                       className="ih-input"
                       style={{ width: 120 }}

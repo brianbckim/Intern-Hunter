@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError, getMyProfile, updateMyProfile, type UserProfileUpdate } from '../lib/api'
 import AppLayout from '../components/AppLayout'
+import { useUiText } from '../lib/uiLanguage'
 import './Dashboard.css'
 
 type ProfileForm = {
@@ -41,6 +42,7 @@ function normalizeFromApi(profile: Awaited<ReturnType<typeof getMyProfile>>): Pr
 }
 
 export default function Profile() {
+  const { ui } = useUiText()
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
   const [originalForm, setOriginalForm] = useState<ProfileForm>(EMPTY_FORM)
   const [skillInput, setSkillInput] = useState('')
@@ -64,7 +66,7 @@ export default function Profile() {
             ? errorValue.message
             : errorValue instanceof Error
               ? errorValue.message
-              : 'Failed to load profile.'
+                : ui('Failed to load profile.', '프로필을 불러오지 못했습니다.')
         setError(message)
       } finally {
         setLoading(false)
@@ -116,14 +118,14 @@ export default function Profile() {
       setForm(normalized)
       setOriginalForm(normalized)
       window.dispatchEvent(new CustomEvent('internhunter:profile-updated', { detail: updated }))
-      setSuccess('Profile saved successfully.')
+      setSuccess(ui('Profile saved successfully.', '프로필이 저장되었습니다.'))
     } catch (errorValue) {
       const message =
         errorValue instanceof ApiError
           ? errorValue.message
           : errorValue instanceof Error
             ? errorValue.message
-            : 'Failed to save profile.'
+            : ui('Failed to save profile.', '프로필 저장에 실패했습니다.')
       setError(message)
     } finally {
       setSaving(false)
@@ -131,16 +133,16 @@ export default function Profile() {
   }
 
   return (
-    <AppLayout pageLabel="Profile">
+    <AppLayout pageLabel={ui('Profile', '프로필')}>
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Your Profile</div>
-            <p className="ih-muted">Keep your info up to date for better internship matches.</p>
+            <div className="ih-cardTitle">{ui('Your Profile', '내 프로필')}</div>
+            <p className="ih-muted">{ui('Keep your info up to date for better internship matches.', '더 나은 인턴십 매칭을 위해 정보를 최신 상태로 유지하세요.')}</p>
           </div>
 
           <div className="ih-cardBody">
-            {loading ? <p className="ih-muted">Loading profile…</p> : null}
+            {loading ? <p className="ih-muted">{ui('Loading profile…', '프로필 불러오는 중…')}</p> : null}
 
             {error ? (
               <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
@@ -158,10 +160,10 @@ export default function Profile() {
               <div className="mt-2 grid max-w-2xl gap-5">
                 {/* Name */}
                 <label className="grid gap-1.5">
-                  <span className="text-sm font-semibold">Name</span>
+                  <span className="text-sm font-semibold">{ui('Name', '이름')}</span>
                   <input
                     className="ih-input"
-                    placeholder="e.g. Jane Doe"
+                    placeholder={ui('e.g. Jane Doe', '예: 홍길동')}
                     value={form.name}
                     onChange={(e) => updateField('name', e.target.value)}
                   />
@@ -169,10 +171,10 @@ export default function Profile() {
 
                 {/* Major / Program */}
                 <label className="grid gap-1.5">
-                  <span className="text-sm font-semibold">Major / Program</span>
+                  <span className="text-sm font-semibold">{ui('Major / Program', '전공 / 과정')}</span>
                   <input
                     className="ih-input"
-                    placeholder="e.g. Computer Science"
+                    placeholder={ui('e.g. Computer Science', '예: 컴퓨터공학')}
                     value={form.major_or_program}
                     onChange={(e) => updateField('major_or_program', e.target.value)}
                   />
@@ -180,10 +182,10 @@ export default function Profile() {
 
                 {/* Career Interests */}
                 <label className="grid gap-1.5">
-                  <span className="text-sm font-semibold">Career Interests</span>
+                  <span className="text-sm font-semibold">{ui('Career Interests', '관심 진로')}</span>
                   <input
                     className="ih-input"
-                    placeholder="e.g. Full-stack development, Machine learning"
+                    placeholder={ui('e.g. Full-stack development, Machine learning', '예: 풀스택 개발, 머신러닝')}
                     value={form.career_interests}
                     onChange={(e) => updateField('career_interests', e.target.value)}
                   />
@@ -191,12 +193,12 @@ export default function Profile() {
 
                 {/* Skills — chip / tag system */}
                 <div className="grid gap-1.5">
-                  <span className="text-sm font-semibold">Skills</span>
+                  <span className="text-sm font-semibold">{ui('Skills', '기술 스택')}</span>
 
                   <div className="flex gap-2">
                     <input
                       className="ih-input"
-                      placeholder="Type a skill and press Enter"
+                      placeholder={ui('Type a skill and press Enter', '기술을 입력한 뒤 Enter를 누르세요')}
                       value={skillInput}
                       onChange={(e) => setSkillInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -207,7 +209,7 @@ export default function Profile() {
                       }}
                     />
                     <button type="button" className="ih-btnGhost shrink-0" onClick={addSkill}>
-                      Add
+                      {ui('Add', '추가')}
                     </button>
                   </div>
 
@@ -236,17 +238,17 @@ export default function Profile() {
                       ))}
                     </div>
                   ) : (
-                    <p className="ih-muted mt-1">No skills added yet.</p>
+                    <p className="ih-muted mt-1">{ui('No skills added yet.', '아직 추가된 기술이 없습니다.')}</p>
                   )}
                 </div>
 
                 {/* Graduation Year */}
                 <label className="grid gap-1.5">
-                  <span className="text-sm font-semibold">Graduation Year</span>
+                  <span className="text-sm font-semibold">{ui('Graduation Year', '졸업 연도')}</span>
                   <input
                     className="ih-input"
                     type="number"
-                    placeholder="e.g. 2028"
+                    placeholder={ui('e.g. 2028', '예: 2028')}
                     value={form.graduation_year}
                     onChange={(e) => updateField('graduation_year', e.target.value)}
                   />
@@ -260,7 +262,7 @@ export default function Profile() {
                     disabled={!isDirty || saving}
                     onClick={() => void handleSave()}
                   >
-                    {saving ? 'Saving…' : 'Save Changes'}
+                    {saving ? ui('Saving…', '저장 중…') : ui('Save Changes', '변경사항 저장')}
                   </button>
                   <button
                     className="ih-btnGhost"
@@ -268,7 +270,7 @@ export default function Profile() {
                     disabled={!isDirty || saving}
                     onClick={handleCancel}
                   >
-                    Cancel
+                    {ui('Cancel', '취소')}
                   </button>
                 </div>
               </div>

@@ -10,6 +10,8 @@ type ResumePreviewProps = {
   onDownloadFile: () => Promise<void>
 }
 
+import { useUiText } from '../lib/uiLanguage'
+
 export default function ResumePreview({
   loading,
   fileName,
@@ -21,29 +23,30 @@ export default function ResumePreview({
   emptyPreviewMessage,
   onDownloadFile,
 }: ResumePreviewProps) {
+  const { ui } = useUiText()
   return (
     <section className="ih-card">
       <div className="ih-cardHeader">
-        <div className="ih-cardTitle">Resume Preview Area</div>
+        <div className="ih-cardTitle">{ui('Resume Preview Area', '이력서 미리보기')}</div>
       </div>
 
       <div className="ih-cardBody">
         {successMessage ? <div className="ih-success">{successMessage}</div> : null}
         {errorMessage ? <div className="ih-error">{errorMessage}</div> : null}
-        {loading ? <div className="ih-muted">Loading preview...</div> : null}
+        {loading ? <div className="ih-muted">{ui('Loading preview...', '미리보기 불러오는 중...')}</div> : null}
 
         {!loading && fileName ? (
           <div className="resume-previewToolbar">
             {pdfUrl ? (
               <a className="ih-btnGhost" href={`${pdfUrl}#zoom=page-fit`} target="_blank" rel="noreferrer">
-                Open Full PDF
+                {ui('Open Full PDF', '전체 PDF 열기')}
               </a>
             ) : (
-              <div className="ih-muted">Word preview is rendered in-app when supported.</div>
+              <div className="ih-muted">{ui('Word preview is rendered in-app when supported.', '지원되는 경우 Word 미리보기가 화면 내에 표시됩니다.')}</div>
             )}
 
             <button className="ih-btnGhost" type="button" onClick={() => void onDownloadFile()}>
-              Download File
+              {ui('Download File', '파일 다운로드')}
             </button>
           </div>
         ) : null}
@@ -67,7 +70,7 @@ export default function ResumePreview({
         </div>
 
         <div className="ih-muted" style={{ marginTop: 10 }}>
-          File: <strong>{fileName ?? '—'}</strong>
+          {ui('File', '파일')}: <strong>{fileName ?? '—'}</strong>
         </div>
       </div>
     </section>

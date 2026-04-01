@@ -18,6 +18,7 @@ import {
   type TailorResumeSnapshotResponse,
   type TailorResumeResponse,
 } from '../lib/api'
+import { useUiText } from '../lib/uiLanguage'
 import './Dashboard.css'
 
 type Job = {
@@ -105,6 +106,7 @@ function applyTailoringSnapshots(
 }
 
 export default function Jobs() {
+  const { ui } = useUiText()
   const [searchParams, setSearchParams] = useSearchParams()
   const token = getAccessToken()
   const initialTab = searchParams.get('tab') === 'ai' ? 'ai' : 'internships'
@@ -177,7 +179,7 @@ export default function Jobs() {
         const data = (await response.json()) as Job[]
         setJobs(data)
       } catch (errorValue) {
-        const message = errorValue instanceof Error ? errorValue.message : 'Failed to load jobs.'
+        const message = errorValue instanceof Error ? errorValue.message : ui('Failed to load jobs.', '채용공고를 불러오지 못했습니다.')
         setError(message)
       } finally {
         setLoading(false)
@@ -424,7 +426,7 @@ export default function Jobs() {
           return
         }
         if (latest.status === 'error') {
-          setRecError(latest.error || 'Failed to generate recommendations.')
+          setRecError(latest.error || ui('Failed to generate recommendations.', '추천 생성에 실패했습니다.'))
           setRecLoading(false)
           return
         }
@@ -434,9 +436,9 @@ export default function Jobs() {
       } catch (e) {
         if (cancelled) return
         if (e instanceof ApiError && e.status === 401) {
-          setRecError('Please login again to load recommendations.')
+          setRecError(ui('Please login again to load recommendations.', '추천을 불러오려면 다시 로그인해 주세요.'))
         } else {
-          setRecError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+          setRecError(e instanceof Error ? e.message : ui('Failed to load recommendations.', '추천을 불러오지 못했습니다.'))
         }
         setRecLoading(false)
       }
@@ -452,7 +454,7 @@ export default function Jobs() {
         const latestResumeId = resumes[0]?.resume_id ?? null
         if (!latestResumeId) {
           setRecLoading(false)
-          setRecError('Upload a resume to get AI recommendations.')
+          setRecError(ui('Upload a resume to get AI recommendations.', 'AI 추천을 받으려면 이력서를 업로드하세요.'))
           return
         }
 
@@ -482,9 +484,9 @@ export default function Jobs() {
       } catch (e) {
         if (cancelled) return
         if (e instanceof ApiError && e.status === 401) {
-          setRecError('Please login again to load recommendations.')
+          setRecError(ui('Please login again to load recommendations.', '추천을 불러오려면 다시 로그인해 주세요.'))
         } else {
-          setRecError(e instanceof Error ? e.message : 'Failed to load recommendations.')
+          setRecError(e instanceof Error ? e.message : ui('Failed to load recommendations.', '추천을 불러오지 못했습니다.'))
         }
         setRecLoading(false)
       }
@@ -499,7 +501,7 @@ export default function Jobs() {
 
   async function handleTailorResume(job: RecommendationJob) {
     if (!recResumeId) {
-      setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: 'Upload a resume before tailoring.' }))
+      setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: ui('Upload a resume before tailoring.', '이력서를 업로드한 뒤 맞춤 생성을 진행하세요.') }))
       return
     }
 
@@ -532,7 +534,7 @@ export default function Jobs() {
         },
       })
     } catch (errorValue) {
-      const message = errorValue instanceof Error ? errorValue.message : 'Failed to tailor resume.'
+      const message = errorValue instanceof Error ? errorValue.message : ui('Failed to tailor resume.', '이력서 맞춤 생성에 실패했습니다.')
       setTailoringErrorByUid((previous) => ({ ...previous, [job.uid]: message }))
     } finally {
       setTailoringByUid((previous) => {
@@ -552,7 +554,7 @@ export default function Jobs() {
         setCopiedUid((current) => (current === jobUid ? null : current))
       }, 1500)
     } catch {
-      setTailoringErrorByUid((previous) => ({ ...previous, [jobUid]: 'Failed to copy tailored resume.' }))
+      setTailoringErrorByUid((previous) => ({ ...previous, [jobUid]: ui('Failed to copy tailored resume.', '맞춤 이력서 복사에 실패했습니다.') }))
     }
   }
 
@@ -576,19 +578,19 @@ export default function Jobs() {
               gap: 12,
             }}
           >
-            <div style={{ fontWeight: 600 }}>Tailored Resume Draft</div>
+            <div style={{ fontWeight: 600 }}>{ui('Tailored Resume Draft', '맞춤 이력서 초안')}</div>
             <div className="ih-muted">{tailored.summary}</div>
 
             {tailored.keywords_to_highlight.length ? (
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Keywords to highlight</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{ui('Keywords to highlight', '강조할 키워드')}</div>
                 <div className="ih-muted">{tailored.keywords_to_highlight.join(', ')}</div>
               </div>
             ) : null}
 
             {tailored.targeted_edits.length ? (
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Targeted edits</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{ui('Targeted edits', '추천 수정사항')}</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {tailored.targeted_edits.map((item) => (
                     <li key={item} className="ih-muted" style={{ marginBottom: 4 }}>{item}</li>
@@ -598,7 +600,7 @@ export default function Jobs() {
             ) : null}
 
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Draft</div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>{ui('Draft', '초안')}</div>
               <textarea
                 className="ih-input"
                 value={tailored.tailored_resume}
@@ -613,7 +615,7 @@ export default function Jobs() {
                 type="button"
                 onClick={() => void handleCopyTailoredResume(jobUid, tailored.tailored_resume)}
               >
-                {copiedUid === jobUid ? 'Copied' : 'Copy Draft'}
+                {copiedUid === jobUid ? ui('Copied', '복사됨') : ui('Copy Draft', '초안 복사')}
               </button>
             </div>
           </div>
@@ -661,7 +663,7 @@ export default function Jobs() {
       setShowApplyModal(false)
     } catch (errorValue) {
       const message =
-        errorValue instanceof ApiError ? errorValue.message : 'Could not save application. Try again.'
+        errorValue instanceof ApiError ? errorValue.message : ui('Could not save application. Try again.', '지원 내역을 저장하지 못했습니다. 다시 시도해 주세요.')
       setApplyModalError(message)
     } finally {
       setApplySaving(false)
@@ -694,7 +696,7 @@ export default function Jobs() {
       })
       void refreshAppliedKeys()
     } catch (errorValue) {
-      const message = errorValue instanceof ApiError ? errorValue.message : 'Could not update saved job.'
+      const message = errorValue instanceof ApiError ? errorValue.message : ui('Could not update saved job.', '저장한 공고를 업데이트하지 못했습니다.')
       setError(message)
     }
   }
@@ -722,7 +724,7 @@ export default function Jobs() {
 
           <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="ih-btnPrimary" type="button" disabled={tailoring} onClick={() => void handleTailorResume(job)}>
-              {tailoring ? 'Tailoring...' : 'Tailor Resume to JD'}
+              {tailoring ? ui('Tailoring...', '맞춤 생성 중...') : ui('Tailor Resume to JD', 'JD 기준 이력서 맞춤 생성')}
             </button>
             <button
               className="ih-btnGhost"
@@ -738,10 +740,10 @@ export default function Jobs() {
                 })
               }
             >
-              {isSaved ? 'Unsave' : 'Save Job'}
+              {isSaved ? ui('Unsave', '저장 취소') : ui('Save Job', '공고 저장')}
             </button>
             {alreadyApplied ? (
-              <span className="ih-jobAppliedPill">Applied already</span>
+              <span className="ih-jobAppliedPill">{ui('Applied already', '이미 지원함')}</span>
             ) : job.url ? (
               <a
                 className="ih-btnPrimary"
@@ -760,7 +762,7 @@ export default function Jobs() {
                   })
                 }
               >
-                Apply
+                {ui('Apply', '지원')}
               </a>
             ) : (
               <button
@@ -777,7 +779,7 @@ export default function Jobs() {
                   })
                 }
               >
-                Apply
+                {ui('Apply', '지원')}
               </button>
             )}
           </div>
@@ -788,7 +790,7 @@ export default function Jobs() {
   }
 
   return (
-    <AppLayout pageLabel="Jobs" activeNav="jobs">
+    <AppLayout pageLabel={ui('Jobs', '채용공고')} activeNav="jobs">
       <ApplyMarkModal
         open={showApplyModal}
         jobTitle={pendingApply?.title ?? ''}
@@ -802,21 +804,21 @@ export default function Jobs() {
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
-            <div className="ih-cardTitle">Jobs</div>
+            <div className="ih-cardTitle">{ui('Jobs', '채용공고')}</div>
             <div className="ih-actions" style={{ marginTop: 12 }}>
               <button
                 type="button"
                 className={activeTab === 'ai' ? 'ih-btnPrimary' : 'ih-btnGhost'}
                 onClick={() => setTab('ai')}
               >
-                AI Recommendations
+                {ui('AI Recommendations', 'AI 추천')}
               </button>
               <button
                 type="button"
                 className={activeTab === 'internships' ? 'ih-btnPrimary' : 'ih-btnGhost'}
                 onClick={() => setTab('internships')}
               >
-                Internships
+                {ui('Internships', '인턴십')}
               </button>
             </div>
           </div>
@@ -828,8 +830,8 @@ export default function Jobs() {
 
                 <div className="ih-row" style={{ marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 22 }}>AI-based recommendations</div>
-                    <div className="ih-muted">Recommendations generate automatically based on your latest resume.</div>
+                    <div style={{ fontWeight: 700, fontSize: 22 }}>{ui('AI-based recommendations', 'AI 기반 추천')}</div>
+                    <div className="ih-muted">{ui('Recommendations generate automatically based on your latest resume.', '추천은 최신 이력서를 기준으로 자동 생성됩니다.')}</div>
                   </div>
                 </div>
 
@@ -839,23 +841,23 @@ export default function Jobs() {
                   </div>
                 ) : null}
 
-                {recLoading ? <div className="ih-muted">Loading… (AI recommendations are generating)</div> : null}
+                {recLoading ? <div className="ih-muted">{ui('Loading… (AI recommendations are generating)', '불러오는 중… (AI 추천 생성 중)')}</div> : null}
 
                 {recData?.jobs?.length ? (
                   <>
                     {recData.jobs.slice(0, 20).map((job) => renderRecommendationJob(job))}
                     <div className="ih-muted" style={{ marginTop: 8 }}>
-                      {recData.ai_used ? 'Ordered by AI.' : 'Ordered by heuristics (AI not enabled).'}
+                      {recData.ai_used ? ui('Ordered by AI.', 'AI 기준 정렬됨.') : ui('Ordered by heuristics (AI not enabled).', '휴리스틱 기준 정렬됨 (AI 미사용).')}
                     </div>
                   </>
                 ) : !recLoading ? (
-                  <div className="ih-muted">No recommendations generated yet.</div>
+                  <div className="ih-muted">{ui('No recommendations generated yet.', '아직 생성된 추천이 없습니다.')}</div>
                 ) : null}
               </>
             ) : (
               <>
                 <div className="ih-muted" style={{ marginBottom: 12 }}>
-                  {filteredJobs.length} results
+                  {ui(`${filteredJobs.length} results`, `결과 ${filteredJobs.length}건`)}
                 </div>
 
                 {error ? <p className="ih-error">{error}</p> : null}
@@ -863,21 +865,21 @@ export default function Jobs() {
                 <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
                   <input
                     className="ih-input"
-                    placeholder="Search title, company, location..."
+                    placeholder={ui('Search title, company, location...', '직무명, 회사, 지역 검색...')}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
 
                   <select className="ih-input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="company">Company A-Z</option>
-                    <option value="title">Title A-Z</option>
+                    <option value="newest">{ui('Newest', '최신순')}</option>
+                    <option value="oldest">{ui('Oldest', '오래된순')}</option>
+                    <option value="company">{ui('Company A-Z', '회사명 A-Z')}</option>
+                    <option value="title">{ui('Title A-Z', '직무명 A-Z')}</option>
                   </select>
                 </div>
 
                 <div style={{ marginBottom: 24 }}>
-                  <div style={{ marginBottom: 8, fontWeight: 600 }}>Category</div>
+                  <div style={{ marginBottom: 8, fontWeight: 600 }}>{ui('Category', '카테고리')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                     {categories.map((category) => (
                       <label key={category} style={{ fontSize: 14 }}>
@@ -893,7 +895,7 @@ export default function Jobs() {
                   </div>
                 </div>
 
-                {loading ? <div className="ih-muted">Loading...</div> : null}
+                {loading ? <div className="ih-muted">{ui('Loading...', '불러오는 중...')}</div> : null}
 
                 {!loading ? (
                   <>
@@ -906,7 +908,7 @@ export default function Jobs() {
                         <div className="ih-muted" style={{ marginBottom: 6 }}>
                           {job.company || 'Unknown company'} • {job.location || 'Unknown location'}
                         </div>
-                        <div className="ih-muted">Posted: {formatDate(job.date_posted) || '—'}</div>
+                          <div className="ih-muted">{ui('Posted', '게시일')}: {formatDate(job.date_posted) || '—'}</div>
 
                         <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                           <button
@@ -930,7 +932,7 @@ export default function Jobs() {
                               })
                             }
                           >
-                            {tailoringByUid[job.uid] ? 'Tailoring...' : 'Tailor Resume to JD'}
+                            {tailoringByUid[job.uid] ? ui('Tailoring...', '맞춤 생성 중...') : ui('Tailor Resume to JD', 'JD 기준 이력서 맞춤 생성')}
                           </button>
                           {(() => {
                             const listKey = appliedKeyForListing(job)
@@ -939,7 +941,7 @@ export default function Jobs() {
                             const saved = record?.status === 'saved'
                             const source = (job.source && job.source.trim()) || 'internhunter'
                             if (applied) {
-                              return <span className="ih-jobAppliedPill">Applied already</span>
+                              return <span className="ih-jobAppliedPill">{ui('Applied already', '이미 지원함')}</span>
                             }
                             return (
                               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -957,7 +959,7 @@ export default function Jobs() {
                                     })
                                   }
                                 >
-                                  {saved ? 'Unsave' : 'Save Job'}
+                                  {saved ? ui('Unsave', '저장 취소') : ui('Save Job', '공고 저장')}
                                 </button>
                                 {job.url ? (
                                   <a
@@ -977,7 +979,7 @@ export default function Jobs() {
                                       })
                                     }
                                   >
-                                    Apply
+                                    {ui('Apply', '지원')}
                                   </a>
                                 ) : (
                                   <button
@@ -994,7 +996,7 @@ export default function Jobs() {
                                       })
                                     }
                                   >
-                                    Apply
+                                    {ui('Apply', '지원')}
                                   </button>
                                 )}
                               </div>
@@ -1020,11 +1022,11 @@ export default function Jobs() {
                         disabled={page === 1}
                         onClick={() => setPage((current) => current - 1)}
                       >
-                        Previous
+                        {ui('Previous', '이전')}
                       </button>
 
                       <span className="ih-muted">
-                        Page {page} of {totalPages}
+                        {ui(`Page ${page} of ${totalPages}`, `${page} / ${totalPages} 페이지`)}
                       </span>
 
                       <button
@@ -1032,7 +1034,7 @@ export default function Jobs() {
                         disabled={page === totalPages}
                         onClick={() => setPage((current) => current + 1)}
                       >
-                        Next
+                        {ui('Next', '다음')}
                       </button>
                     </div>
                   </>

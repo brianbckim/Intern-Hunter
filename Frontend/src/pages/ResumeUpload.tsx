@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useUiText } from '../lib/uiLanguage'
 
 type ResumeUploadProps = {
   uploading: boolean
@@ -23,6 +24,7 @@ export default function ResumeUpload({
   onAnalyze,
   uploadedStatus,
 }: ResumeUploadProps) {
+  const { ui } = useUiText()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragActive, setDragActive] = useState(false)
 
@@ -35,17 +37,17 @@ export default function ResumeUpload({
   return (
     <section className="ih-card">
       <div className="ih-cardHeader">
-        <div className="ih-cardTitle">Resume Upload</div>
+        <div className="ih-cardTitle">{ui('Resume Upload', '이력서 업로드')}</div>
       </div>
 
       <div className="ih-cardBody">
         {uploadedStatus ? (
           <div style={{ display: 'grid', gap: 4 }}>
-            <div className="ih-pill">{uploadedStatus.uploaded ? 'Uploaded' : 'Not uploaded'}</div>
+            <div className="ih-pill">{uploadedStatus.uploaded ? ui('Uploaded', '업로드됨') : ui('Not uploaded', '업로드 안 됨')}</div>
             <div className="ih-muted">
-              File: <strong>{uploadedStatus.fileName}</strong>
+              {ui('File', '파일')}: <strong>{uploadedStatus.fileName}</strong>
             </div>
-            <div className="ih-muted">Last updated: {uploadedStatus.lastUpdated}</div>
+            <div className="ih-muted">{ui('Last updated', '마지막 업데이트')}: {uploadedStatus.lastUpdated}</div>
           </div>
         ) : null}
 
@@ -73,16 +75,16 @@ export default function ResumeUpload({
             void handleFiles(event.dataTransfer.files)
           }}
         >
-          <div className="ih-muted">Drag & drop resume here</div>
-          <div className="ih-muted">Accepted: {ACCEPTED_EXTENSIONS.join(', ').toUpperCase()}</div>
+          <div className="ih-muted">{ui('Drag & drop resume here', '여기로 이력서를 드래그해 놓으세요')}</div>
+          <div className="ih-muted">{ui('Accepted', '지원 형식')}: {ACCEPTED_EXTENSIONS.join(', ').toUpperCase()}</div>
         </div>
 
         <div className="ih-actions">
           <button className="ih-btnPrimary" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-            {uploading ? 'Uploading...' : 'Upload PDF/DOC'}
+            {uploading ? ui('Uploading...', '업로드 중...') : ui('Upload PDF/DOC', 'PDF/DOC 업로드')}
           </button>
           <button className="ih-btnGhost" disabled={analyzeDisabled || uploading} onClick={onAnalyze}>
-            Analyze Resume
+            {ui('Analyze Resume', '이력서 분석')}
           </button>
         </div>
 
@@ -91,7 +93,7 @@ export default function ResumeUpload({
             <div className="resume-progressBar">
               <div className="resume-progressFill" style={{ width: `${uploadProgress}%` }} />
             </div>
-            <div className="ih-muted">Uploading: {uploadProgress}%</div>
+            <div className="ih-muted">{ui('Uploading', '업로드 중')}: {uploadProgress}%</div>
           </div>
         ) : null}
       </div>

@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
-import { ApiError, deleteMyApplication, listMyApplications, type JobApplicationRecord } from '../lib/api'
+import {
+  ApiError,
+  deleteMyApplication,
+  listMyApplications,
+  recordJobApplication,
+  type JobApplicationRecord,
+} from '../lib/api'
 import { useUiText } from '../lib/uiLanguage'
 import { useLanguageStore } from '../stores/langStore'
 import type { Language } from '../stores/langStore'
@@ -33,8 +39,8 @@ function formatStatusLabel(status: string, language: Language): string {
   const labels: Record<string, Record<Language, string>> = {
     saved: { en: 'Saved', ko: '저장됨', es: 'Guardado', fr: 'Enregistré' },
     applied: { en: 'Applied', ko: '지원 완료', es: 'Aplicado', fr: 'Candidature envoyée' },
-    interview: { en: 'Interview', ko: '면접 진행', es: 'Entrevista', fr: 'Entretien' },
-    offer: { en: 'Offer', ko: '오퍼', es: 'Oferta', fr: 'Offre' },
+    interview: { en: 'Interviewing', ko: '면접 진행', es: 'Entrevista', fr: 'Entretien' },
+    offer: { en: 'Offered', ko: '오퍼', es: 'Oferta', fr: 'Offre' },
     rejected: { en: 'Rejected', ko: '불합격', es: 'Rechazado', fr: 'Refusé' }
   }
 
@@ -63,6 +69,30 @@ function rowMatchesQuery(row: JobApplicationRecord, q: string): boolean {
   return hay.includes(needle)
 }
 
+function getOutcomeSelectValue(status: string): 'applied' | 'interview' | 'offer' | 'rejected' | '' {
+  if (status === 'applied' || status === 'interview' || status === 'offer' || status === 'rejected') {
+    return status
+  }
+  return ''
+}
+
+function getStatusClassName(status: string): string {
+  switch (status) {
+    case 'saved':
+      return 'ih-appStatus ih-appStatus--saved'
+    case 'applied':
+      return 'ih-appStatus ih-appStatus--applied'
+    case 'interview':
+      return 'ih-appStatus ih-appStatus--interview'
+    case 'offer':
+      return 'ih-appStatus ih-appStatus--offer'
+    case 'rejected':
+      return 'ih-appStatus ih-appStatus--rejected'
+    default:
+      return 'ih-appStatus'
+  }
+}
+
 export default function Applications() {
   const { ui } = useUiText()
   const language = useLanguageStore((state) => state.language)
@@ -73,6 +103,7 @@ export default function Applications() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [updatingOutcomeId, setUpdatingOutcomeId] = useState<string | null>(null)
 
   const statusFilter = searchParams.get('status')?.trim().toLowerCase() || 'all'
 
@@ -152,6 +183,45 @@ export default function Applications() {
       )
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  async function handleOutcomeChange(
+    row: JobApplicationRecord,
+    nextStatus: 'applied' | 'interview' | 'offer' | 'rejected'
+  ): Promise<void> {
+    setUpdatingOutcomeId(row.application_id)
+    setError(null)
+
+    try {
+      const updated = await recordJobApplication({
+        job_source: row.job_source,
+        job_external_id: row.job_external_id,
+        status: nextStatus,
+        job_title: row.job_title,
+        job_company: row.job_company,
+        job_location: row.job_location,
+        job_url: row.job_url,
+      })
+
+      setRows((prev) =>
+        prev
+          ? prev.map((item) => (item.application_id === row.application_id ? updated : item))
+          : prev
+      )
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : ui(
+              'Failed to update application outcome.',
+              'Failed to update application outcome.',
+              'No se pudo actualizar el resultado de la solicitud.',
+              'Failed to update application outcome.'
+            )
+      )
+    } finally {
+      setUpdatingOutcomeId(null)
     }
   }
 
@@ -275,6 +345,7 @@ export default function Applications() {
                     <th>{ui('Date applied', '지원일', 'Fecha', 'Date')}</th>
                     <th>{ui('Status', '상태', 'Estado', 'Statut')}</th>
                     <th>{ui('Link', '링크', 'Enlace', 'Lien')}</th>
+                    <th>{ui('Post Application Outcomes', 'Post Application Outcomes', 'Post Application Outcomes', 'Post Application Outcomes')}</th>
                     <th>{ui('Manage', '관리', 'Gestionar', 'Gérer')}</th>
                   </tr>
                 </thead>
@@ -285,7 +356,11 @@ export default function Applications() {
                       <td>{row.job_company || '—'}</td>
                       <td>{row.job_location || '—'}</td>
                       <td>{formatAppliedDate(row.created_at || row.updated_at)}</td>
-                      <td>{formatStatusLabel(row.status, language)}</td>
+                      <td>
+                        <span className={getStatusClassName(row.status)}>
+                          {formatStatusLabel(row.status, language)}
+                        </span>
+                      </td>
                       <td>
                         {row.job_url ? (
                           <a href={row.job_url} target="_blank" rel="noreferrer">
@@ -294,7 +369,44 @@ export default function Applications() {
                         ) : '—'}
                       </td>
                       <td>
+                        <select
+                          className="ih-input"
+                          value={getOutcomeSelectValue(row.status)}
+                          disabled={updatingOutcomeId === row.application_id}
+                          onChange={(event) => {
+                            const nextStatus = event.target.value as 'applied' | 'interview' | 'offer' | 'rejected' | ''
+                            if (!nextStatus) return
+                            void handleOutcomeChange(row, nextStatus)
+                          }}
+                          aria-label={ui(
+                            'Post application outcomes',
+                            'Post application outcomes',
+                            'Post application outcomes',
+                            'Post application outcomes'
+                          )}
+                        >
+                          <option value="">
+                            {updatingOutcomeId === row.application_id
+                              ? ui('Updating...', 'Updating...', 'Updating...', 'Updating...')
+                              : ui('Choose outcome', 'Choose outcome', 'Choose outcome', 'Choose outcome')}
+                          </option>
+                          <option value="applied">
+                            {ui('Applied', 'Applied', 'Applied', 'Applied')}
+                          </option>
+                          <option value="interview">
+                            {ui('Interviewing', 'Interviewing', 'Interviewing', 'Interviewing')}
+                          </option>
+                          <option value="offer">
+                            {ui('Offered', 'Offered', 'Offered', 'Offered')}
+                          </option>
+                          <option value="rejected">
+                            {ui('Rejected', 'Rejected', 'Rejected', 'Rejected')}
+                          </option>
+                        </select>
+                      </td>
+                      <td>
                         <button
+                          className="ih-appDeleteBtn"
                           type="button"
                           disabled={deletingId === row.application_id}
                           onClick={() => void handleDelete(row)}

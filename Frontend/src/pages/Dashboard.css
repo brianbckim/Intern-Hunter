@@ -455,6 +455,36 @@
     font-weight: 600;
 }
 
+.ih-appStatus--saved {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
+}
+
+.ih-appStatus--applied {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.ih-appStatus--interview {
+    border-color: #fde68a;
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.ih-appStatus--offer {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #15803d;
+}
+
+.ih-appStatus--rejected {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
 .ih-appToolbar {
     display: flex;
     flex-wrap: wrap;

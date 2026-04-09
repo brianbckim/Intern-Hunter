@@ -3,11 +3,11 @@ import { useLanguageStore } from '../stores/langStore'
 
 export function useUiText() {
   const language = useLanguageStore((state) => state.language)
-  const isKorean = language === 'ko'
 
-  const ui = useCallback((english: string, korean: string): string => {
-    return isKorean ? korean : english
-  }, [isKorean])
+  const ui = useCallback((english: string, korean: string, spanish: string, french: string): string => {
+    const map = { en: english, ko: korean, es: spanish, fr: french}
+    return map[language as keyof typeof map] ?? english
+  }, [language])
 
-  return { language, isKorean, ui }
+  return {language, ui}
 }

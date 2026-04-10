@@ -81,6 +81,7 @@ export default function Settings() {
     <AppLayout pageLabel="Settings" activeNav="settings">
       <div className="settings-cardBody">
 
+      <div className="ih-grid">
         {/* ── Language ── */}
         <section className="ih-card">
           <div className="ih-cardHeader">
@@ -102,7 +103,6 @@ export default function Settings() {
           </div>
         </section>
 
-      <div className="ih-grid">
         {/* ── Appearance ── */}
         <section className="ih-card">
           <div className="ih-cardHeader">

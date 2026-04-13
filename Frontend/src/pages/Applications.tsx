@@ -118,8 +118,6 @@ export default function Applications() {
         setError(ui(
           'Please sign in again.',
           '다시 로그인해 주세요.',
-          'Por favor, inicie sesión de nuevo.',
-          'Veuillez vous reconnecter.'
         ))
       } else {
         setError(
@@ -128,8 +126,6 @@ export default function Applications() {
             : ui(
                 'Failed to load applications.',
                 '지원 내역을 불러오지 못했습니다.',
-                'No se pudieron cargar las aplicaciones.',
-                'Échec du chargement des candidatures.'
               )
         )
       }
@@ -158,8 +154,6 @@ export default function Applications() {
       ui(
         `Remove “${row.job_title || 'this application'}” from your list?`,
         `목록에서 “${row.job_title || '이 지원 내역'}”을 삭제할까요?`,
-        `¿Eliminar “${row.job_title || 'esta solicitud'}” de tu lista?`,
-        `Supprimer “${row.job_title || 'cette candidature'}” de votre liste ?`
       )
     )
     if (!ok) return
@@ -177,8 +171,6 @@ export default function Applications() {
           : ui(
               'Failed to delete.',
               '삭제하지 못했습니다.',
-              'No se pudo eliminar.',
-              'Échec de la suppression.'
             )
       )
     } finally {
@@ -216,8 +208,6 @@ export default function Applications() {
           : ui(
               'Failed to update application outcome.',
               'Failed to update application outcome.',
-              'No se pudo actualizar el resultado de la solicitud.',
-              'Failed to update application outcome.'
             )
       )
     } finally {
@@ -227,21 +217,19 @@ export default function Applications() {
 
   return (
     <AppLayout
-      pageLabel={ui('Applications', '지원현황', 'Solicitudes', 'Candidatures')}
+      pageLabel={ui('Applications', '지원현황')}
       activeNav="applications"
     >
       <div className="ih-grid">
         <section className="ih-card">
           <div className="ih-cardHeader">
             <div className="ih-cardTitle">
-              {ui('Applications', '지원현황', 'Solicitudes', 'Candidatures')}
+              {ui('Applications', '지원현황')}
             </div>
             <div className="ih-muted" style={{ marginTop: 8 }}>
               {ui(
                 'Roles you marked as applied from the Jobs page.',
                 'Jobs 페이지에서 추적한 지원 내역입니다.',
-                'Puestos que marcaste como solicitados desde la página de empleos.',
-                'Postes que vous avez marqués comme candidats depuis la page emplois.'
               )}
             </div>
           </div>
@@ -253,17 +241,13 @@ export default function Applications() {
                 type="search"
                 placeholder={ui(
                   'Search title, company, location, status…',
-                  '직무명, 회사, 지역, 상태 검색…',
-                  'Buscar puesto, empresa, ubicación, estado…',
-                  'Rechercher poste, entreprise, lieu, statut…'
+                  '직무명, 회사, 지역, 상태 검색…'
                 )}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label={ui(
                   'Search applications',
-                  '지원 내역 검색',
-                  'Buscar solicitudes',
-                  'Rechercher des candidatures'
+                  '지원 내역 검색'
                 )}
               />
 
@@ -281,45 +265,39 @@ export default function Applications() {
                 }}
                 aria-label={ui(
                   'Filter application status',
-                  '지원 상태 필터',
-                  'Filtrar estado de la solicitud',
-                  'Filtrer le statut des candidatures'
+                  '지원 상태 필터'
                 )}
               >
-                <option value="all">{ui('All statuses', '전체 상태', 'Todos los estados', 'Tous les statuts')}</option>
-                <option value="saved">{ui('Saved jobs', '저장한 공고', 'Trabajos guardados', 'Offres enregistrées')}</option>
-                <option value="applied">{ui('Applied', '지원 완료', 'Aplicado', 'Candidature envoyée')}</option>
-                <option value="interview">{ui('Interviewing', '면접 진행', 'Entrevistando', 'Entretien en cours')}</option>
-                <option value="offer">{ui('Offers', '오퍼', 'Ofertas', 'Offres')}</option>
-                <option value="rejected">{ui('Rejected', '불합격', 'Rechazado', 'Refusé')}</option>
+                <option value="all">{ui('All statuses', '전체 상태')}</option>
+                <option value="saved">{ui('Saved jobs', '저장한 공고')}</option>
+                <option value="applied">{ui('Applied', '지원 완료')}</option>
+                <option value="interview">{ui('Interviewing', '면접 진행')}</option>
+                <option value="offer">{ui('Offers', '오퍼')}</option>
+                <option value="rejected">{ui('Rejected', '불합격')}</option>
               </select>
 
               <button className="ih-btnGhost" type="button" disabled={loading} onClick={() => void refresh()}>
-                {ui('Refresh', '새로고침', 'Actualizar', 'Actualiser')}
+                {ui('Refresh', '새로고침')}
               </button>
 
               <Link className="ih-btnGhost" to="/jobs">
-                {ui('Browse jobs', '채용공고 보기', 'Ver empleos', 'Parcourir les offres')}
+                {ui('Browse jobs', '채용공고 보기')}
               </Link>
             </div>
 
             {error && <p className="ih-error">{error}</p>}
-            {loading && <div className="ih-muted">{ui('Loading…', '불러오는 중…', 'Cargando…', 'Chargement…')}</div>}
+            {loading && <div className="ih-muted">{ui('Loading…', '불러오는 중…')}</div>}
 
             {!loading && rows && rows.length === 0 && !error && (
               <div className="ih-muted">
                 {ui(
                   'No tracked jobs yet. Open ',
-                  '아직 추적 중인 공고가 없습니다. ',
-                  'Aún no hay trabajos guardados. Abre ',
-                  'Aucune candidature suivie pour le moment. Ouvrez '
+                  '아직 추적 중인 공고가 없습니다. '
                 )}
-                <Link to="/jobs">{ui('Jobs', 'Jobs', 'Empleos', 'Emplois')}</Link>
+                <Link to="/jobs">{ui('Jobs', 'Jobs')}</Link>
                 {ui(
                   ', then save a role or click Apply and confirm with “Yes, Applied” when you return.',
-                  '에서 공고를 저장하거나 지원 후 돌아와 “지원 완료”를 확인하세요.',
-                  ', luego guarda un puesto o aplica y confirma con “Sí, aplicado”.',
-                  ', puis enregistrez un poste ou postulez et confirmez avec « Oui ».'
+                  '에서 공고를 저장하거나 지원 후 돌아와 “지원 완료”를 확인하세요.'
                 )}
               </div>
             )}
@@ -328,9 +306,7 @@ export default function Applications() {
               <div className="ih-muted">
                 {ui(
                   `No matches for “${search}”.`,
-                  `“${search}”와 일치하는 결과가 없습니다.`,
-                  `No hay resultados para “${search}”.`,
-                  `Aucun résultat pour “${search}”.`
+                  `“${search}”와 일치하는 결과가 없습니다.`
                 )}
               </div>
             )}
@@ -339,14 +315,14 @@ export default function Applications() {
               <table className="ih-appTable">
                 <thead>
                   <tr>
-                    <th>{ui('Job title', '직무명', 'Puesto', 'Poste')}</th>
-                    <th>{ui('Company', '회사', 'Empresa', 'Entreprise')}</th>
-                    <th>{ui('Location', '지역', 'Ubicación', 'Lieu')}</th>
-                    <th>{ui('Date applied', '지원일', 'Fecha', 'Date')}</th>
-                    <th>{ui('Status', '상태', 'Estado', 'Statut')}</th>
-                    <th>{ui('Link', '링크', 'Enlace', 'Lien')}</th>
-                    <th>{ui('Post Application Outcomes', 'Post Application Outcomes', 'Post Application Outcomes', 'Post Application Outcomes')}</th>
-                    <th>{ui('Manage', '관리', 'Gestionar', 'Gérer')}</th>
+                    <th>{ui('Job title', '직무명')}</th>
+                    <th>{ui('Company', '회사')}</th>
+                    <th>{ui('Location', '지역')}</th>
+                    <th>{ui('Date applied', '지원일')}</th>
+                    <th>{ui('Status', '상태')}</th>
+                    <th>{ui('Link', '링크')}</th>
+                    <th>{ui('Post Application Outcomes', 'Post Application Outcomes')}</th>
+                    <th>{ui('Manage', '관리')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -364,7 +340,7 @@ export default function Applications() {
                       <td>
                         {row.job_url ? (
                           <a href={row.job_url} target="_blank" rel="noreferrer">
-                            {ui('Open', '열기', 'Abrir', 'Ouvrir')}
+                            {ui('Open', '열기')}
                           </a>
                         ) : '—'}
                       </td>
@@ -381,26 +357,24 @@ export default function Applications() {
                           aria-label={ui(
                             'Post application outcomes',
                             'Post application outcomes',
-                            'Post application outcomes',
-                            'Post application outcomes'
                           )}
                         >
                           <option value="">
                             {updatingOutcomeId === row.application_id
-                              ? ui('Updating...', 'Updating...', 'Updating...', 'Updating...')
-                              : ui('Choose outcome', 'Choose outcome', 'Choose outcome', 'Choose outcome')}
+                              ? ui('Updating...', 'Updating...')
+                              : ui('Choose outcome', 'Choose outcome')}
                           </option>
                           <option value="applied">
-                            {ui('Applied', 'Applied', 'Applied', 'Applied')}
+                            {ui('Applied', 'Applied')}
                           </option>
                           <option value="interview">
-                            {ui('Interviewing', 'Interviewing', 'Interviewing', 'Interviewing')}
+                            {ui('Interviewing', 'Interviewing')}
                           </option>
                           <option value="offer">
-                            {ui('Offered', 'Offered', 'Offered', 'Offered')}
+                            {ui('Offered', 'Offered')}
                           </option>
                           <option value="rejected">
-                            {ui('Rejected', 'Rejected', 'Rejected', 'Rejected')}
+                            {ui('Rejected', 'Rejected')}
                           </option>
                         </select>
                       </td>
@@ -412,8 +386,8 @@ export default function Applications() {
                           onClick={() => void handleDelete(row)}
                         >
                           {deletingId === row.application_id
-                            ? ui('Removing…', '삭제 중…', 'Eliminando…', 'Suppression…')
-                            : ui('Delete', '삭제', 'Eliminar', 'Supprimer')}
+                            ? ui('Removing…', '삭제 중…')
+                            : ui('Delete', '삭제')}
                         </button>
                       </td>
                     </tr>

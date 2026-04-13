@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
-import { deleteAccount } from '../lib/api'
+import { deleteAccount, changePassword } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/langStore'
 import { translations } from '../lib/translate'
@@ -29,11 +29,13 @@ export default function Settings() {
     return translations[language][key] || key
   }
 
-  // Change‑password form (UI only)
+  // Change‑password form
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [pwMsg, setPwMsg] = useState<string | null>(null)
+  const [pwSuccess, setPwSuccess] = useState(false)
+  const [pwLoading, setPwLoading] = useState(false)
 
   // Delete account
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -48,7 +50,9 @@ export default function Settings() {
   const toggleTheme = () =>
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
 
-  function handlePasswordSubmit() {
+  async function handlePasswordSubmit() {
+    setPwMsg(null)
+    setPwSuccess(false)
     if (!currentPw || !newPw || !confirmPw) {
       setPwMsg(t('fillAllFields'))
       return
@@ -57,10 +61,19 @@ export default function Settings() {
       setPwMsg(t('passwordsMismatch'))
       return
     }
-    setPwMsg(t('passwordNotConnected'))
-    setCurrentPw('')
-    setNewPw('')
-    setConfirmPw('')
+    setPwLoading(true)
+    try {
+      await changePassword(currentPw, newPw)
+      setPwSuccess(true)
+      setPwMsg(t('passwordChanged'))
+      setCurrentPw('')
+      setNewPw('')
+      setConfirmPw('')
+    } catch (e) {
+      setPwMsg(e instanceof Error ? e.message : t('passwordChangeFailed'))
+    } finally {
+      setPwLoading(false)
+    }
   }
 
   async function handleDeleteAccount() {
@@ -201,14 +214,15 @@ export default function Settings() {
               </label>
 
               {pwMsg ? (
-                <p className="ih-muted">{pwMsg}</p>
+                <p style={{ color: pwSuccess ? 'green' : '#ef4444', fontSize: 14 }}>{pwMsg}</p>
               ) : null}
 
               <div style={{ paddingTop: 4 }}>
                 <button
                   className="ih-btnPrimary"
                   type="button"
-                  onClick={handlePasswordSubmit}
+                  disabled={pwLoading}
+                  onClick={() => void handlePasswordSubmit()}
                 >
                   {t('updatePassword')}
                 </button>

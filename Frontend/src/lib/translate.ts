@@ -17,6 +17,8 @@ export type TranslationKeys =
   | 'fillAllFields'
   | 'passwordsMismatch'
   | 'passwordNotConnected'
+  | 'passwordChanged'
+  | 'passwordChangeFailed'
   | 'changePassword'
   | 'updatePassword'
   | 'deleteAccount'
@@ -46,6 +48,8 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     fillAllFields: 'Please fill in all fields.',
     passwordsMismatch: 'New passwords do not match.',
     passwordNotConnected: 'Password change is not connected to the backend yet.',
+    passwordChanged: 'Password updated successfully!',
+    passwordChangeFailed: 'Failed to change password.',
 
     changePassword: 'Change Password',
     updatePassword: 'Update Password',
@@ -78,6 +82,8 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     fillAllFields: 'Por favor, completa todos los campos.',
     passwordsMismatch: 'Las nuevas contraseñas no coinciden.',
     passwordNotConnected: 'El cambio de contraseña no está conectado al backend aún.',
+    passwordChanged: '¡Contraseña actualizada con éxito!',
+    passwordChangeFailed: 'Error al cambiar la contraseña.',
 
     changePassword: 'Cambiar contraseña',
     updatePassword: 'Actualizar contraseña',
@@ -110,6 +116,8 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     fillAllFields: 'Veuillez remplir tous les champs.',
     passwordsMismatch: 'Les nouveaux mots de passe ne correspondent pas.',
     passwordNotConnected: "Le changement de mot de passe n'est pas encore connecté au backend.",
+    passwordChanged: 'Mot de passe mis à jour avec succès !',
+    passwordChangeFailed: 'Échec du changement de mot de passe.',
 
     changePassword: 'Changer le mot de passe',
     updatePassword: 'Mettre à jour le mot de passe',
@@ -142,6 +150,8 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     fillAllFields: '모든 항목을 입력해 주세요.',
     passwordsMismatch: '새 비밀번호가 서로 일치하지 않습니다.',
     passwordNotConnected: '비밀번호 변경 기능은 아직 백엔드와 연결되어 있지 않습니다.',
+    passwordChanged: '비밀번호가 성공적으로 변경되었습니다!',
+    passwordChangeFailed: '비밀번호 변경에 실패했습니다.',
 
     changePassword: '비밀번호 변경',
     updatePassword: '비밀번호 업데이트',

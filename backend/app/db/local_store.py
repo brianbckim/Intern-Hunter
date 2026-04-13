@@ -219,6 +219,18 @@ def create_user(doc: dict[str, Any]) -> None:
         _write_store(store)
 
 
+def update_user_password(email: str, new_password_hash: str) -> bool:
+    normalized = email.strip().lower()
+    with _lock:
+        store = _read_store()
+        for user in store["users"]:
+            if str(user.get("email", "")).lower() == normalized:
+                user["password_hash"] = new_password_hash
+                _write_store(store)
+                return True
+    return False
+
+
 def delete_user_by_email(email: str) -> bool:
     normalized = email.strip().lower()
     with _lock:

@@ -10,9 +10,10 @@ from app.db.collections import users_collection
 from app.db.local_store import create_user as create_local_user
 from app.db.local_store import delete_user_by_email as delete_local_user_by_email
 from app.db.local_store import get_user_by_email as get_local_user_by_email
+from app.db.local_store import update_user_password as update_local_user_password
 from app.db.mongo import get_database
 from app.api.deps import get_current_user_email
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterRequest, TokenResponse
 
 
 router = APIRouter(prefix="/auth")
@@ -72,6 +73,39 @@ async def login(payload: LoginRequest) -> TokenResponse:
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return TokenResponse(access_token=token, token_type="bearer")
+
+
+@router.put("/password", status_code=status.HTTP_200_OK)
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user_email: str = Depends(get_current_user_email),
+) -> dict[str, str]:
+    db = get_database()
+
+    if db is None:
+        user = get_local_user_by_email(current_user_email)
+    else:
+        users = users_collection(db)
+        user = await users.find_one({"email": current_user_email})
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if not verify_password(payload.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    new_hash = hash_password(payload.new_password)
+
+    if db is None:
+        update_local_user_password(current_user_email, new_hash)
+    else:
+        users = users_collection(db)
+        await users.update_one(
+            {"email": current_user_email},
+            {"$set": {"password_hash": new_hash}},
+        )
+
+    return {"detail": "Password updated successfully"}
 
 
 @router.delete("/account", status_code=status.HTTP_200_OK)

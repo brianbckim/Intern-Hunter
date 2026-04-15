@@ -1,5 +1,15 @@
 import { getAccessToken } from './auth'
 
+const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+const API_BASE_URL = RAW_API_BASE_URL.replace(/\/+$/, '')
+
+function toApiUrl(input: RequestInfo | URL): RequestInfo | URL {
+  if (typeof input !== 'string') return input
+  if (!input.startsWith('/')) return input
+  if (!API_BASE_URL) return input
+  return `${API_BASE_URL}${input}`
+}
+
 export const API_ENDPOINTS = {
   auth: {
     login: '/api/auth/login',
@@ -36,7 +46,7 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
-  return fetch(input, { ...init, headers })
+  return fetch(toApiUrl(input), { ...init, headers })
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
@@ -369,7 +379,7 @@ export async function uploadResumeWithProgress(
 
   return new Promise<ResumeUploadResponse>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/resumes/upload')
+    xhr.open('POST', String(toApiUrl('/api/resumes/upload')))
     xhr.responseType = 'json'
 
     if (token) {

@@ -28,3 +28,8 @@ Notes:
 
 - Jobs → AI Recommendations uses `POST /api/recommendations/generate` and will show heuristic ordering if AI is disabled/unavailable.
 - To enable local AI, run `ollama serve` and set `AI_PROVIDER=ollama` in `backend/.env`.
+
+## Deploy
+
+- Set `VITE_API_BASE_URL` in your frontend hosting provider to your backend base URL (example: `https://api.example.com`).
+- Keep `VITE_API_BASE_URL` empty for local development with Vite proxy.

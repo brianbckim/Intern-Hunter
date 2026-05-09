@@ -1,114 +1,103 @@
 # Intern-Hunter
-An AI-powered career coaching platform that generates personalized internship, career recommendation, resume feedback, and smart resume building alongside integrated live job listings. 
 
-## Backend (initial scaffold)
+Intern-Hunter is a full-stack internship search and career support application. It combines account management, resume upload and extraction, AI-assisted resume feedback, AI-assisted job recommendations, recruiter search, and application tracking in a single web app.
 
-The backend lives in `backend/` and is a FastAPI app.
+## What is implemented
 
-The AI layer is intentionally pluggable (set `AI_PROVIDER=mock` to disable AI calls, or `AI_PROVIDER=ollama` to use a local Ollama server).
+- Email/password authentication with JWT-based sessions
+- User profile management for major, interests, skills, and graduation year
+- Resume upload, storage, extraction, download, and preview flow
+- AI-generated resume feedback with notes history
+- AI-assisted internship recommendations from the project job listings dataset
+- Resume tailoring for a selected job recommendation
+- Application tracking for saved, applied, interview, rejected, and offer states
+- Recruiter search backed by a large staffing/recruiting CSV dataset
+- Settings for language selection, theme toggle, password change, and account deletion
 
-- Quick start (local): see `backend/README.md`
+## Stack
 
-## Local development (4 terminals)
+- Frontend: React 19, TypeScript, React Router, Zustand, Vite, Tailwind CSS
+- Backend: FastAPI, Motor, Pydantic Settings, Passlib, python-jose
+- AI: Ollama or mock provider through a pluggable provider layer
+- Data assets: internship listings JSON and recruiter CSV
+- Local infrastructure: MongoDB via Docker Compose
 
-This is the typical workflow to run the full stack locally.
+## Repository layout
 
-### Terminal 0 — Docker (MongoDB)
+```text
+.
+├── Frontend/               # React app
+├── backend/                # FastAPI app
+├── .github/workflows/      # GitHub workflow definitions
+├── list_of_staffing_and_recruiter_businesses.csv
+└── README.md
+```
+
+## Local quick start
+
+1. Start MongoDB.
 
 ```bash
-colima start
 cd backend
 docker compose up -d
 ```
 
-### Terminal 1 — Ollama
-
-```bash
-export OLLAMA_KEEP_ALIVE=-1
-ollama serve
-```
-
-### Terminal 2 — Backend (FastAPI)
+2. Set up and run the backend.
 
 ```bash
 cd backend
-source ../.venv/bin/activate
-
-# optional warm-up (keeps the model loaded)
-curl --silent http://localhost:11434/api/generate -d '{
-  "model": "llama3.2:3b",
-  "keep_alive": -1
-}' > /dev/null
-
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Terminal 3 — Frontend (Vite)
+3. Optionally start Ollama for AI-backed feedback and recommendations.
+
+```bash
+ollama serve
+ollama pull llama3.2:3b
+```
+
+4. Start the frontend.
 
 ```bash
 cd Frontend
+npm install
 npm run dev -- --port 5173
 ```
 
-Open the app at http://localhost:5173
+Open http://localhost:5173.
 
-## AI Resume Feedback (Ollama)
+## Main app areas
 
-This repo supports running resume feedback locally via Ollama (default model: `llama3.2:3b`).
+- `/login` and `/register`: authentication
+- `/`: dashboard summary for resume status, feedback, recommendations, and application activity
+- `/profile`: editable user profile
+- `/resume`: upload, preview, and manage resumes
+- `/resume-feedback`: generate and review AI feedback
+- `/jobs`: browse listings, view recommendations, and tailor resumes
+- `/applications`: track application status
+- `/recruiters`: search recruiter and staffing firm records
+- `/settings`: account, theme, and language settings
 
-- Install Ollama:
-  - macOS (Homebrew): `brew install ollama`
-  - Linux: `curl -fsSL https://ollama.com/install.sh | sh`
-  - Windows: use the installer from https://ollama.com/
-- Install + run Ollama, then pull the model:
-  - `ollama serve`
-  - `ollama pull llama3.2:3b`
-- In `backend/.env`, set `AI_PROVIDER=ollama` (see `backend/.env.example` for the full set of variables).
+## Team
 
-There is no standalone Python script you run for AI feedback — start the backend API with `uvicorn` (see `backend/README.md`).
+- Brian Kim — Core AI Systems & Full-Stack Developer
+- Chenfeng Su — Scrum Master & Backend Developer
+- Tarik Farhoud — Frontend & Backend Developer
+- Triet Nguyen — Frontend Developer & Team Lead
+- Cotten Lumb — Frontend Developer & Tester
 
-## AI Internship Recommendations (Jobs)
+## Project context
 
-This repo also supports generating AI-assisted internship recommendations from the live listings JSON.
+- Course: CIS4914
+- Project type: Team-based senior project
+- Timeline: Spring 2026
+- School: University of Florida
 
-- Backend API: `POST /api/recommendations/generate` (requires auth)
-- Listings source (auto-updated): `backend/app/jobs/Intern-Hunter-Listing.json`
-- If AI is disabled/unavailable, the API falls back to heuristic ordering and returns `ai_used=false`.
+## Additional docs
 
-## Resume upload + parsing (WIP)
-
-This branch adds a basic end-to-end resume flow so we can actually exercise the UI against real APIs.
-
-**Backend**
-
-- Authenticated resume endpoints (upload, list, detail, download)
-- On upload, we extract and store plain text for quick inspection
-  - PDF: `pdfminer.six`
-  - DOCX: `python-docx`
-  - DOC: `antiword`
-- Notes:
-  - Some clients upload as `application/octet-stream` (we handle that as long as the extension is valid)
-
-**Frontend**
-
-- Login / Register page that stores an access token locally
-- Dashboard “Resume Status” card wired to the backend (real status + upload)
-- Dedicated Resume page for upload + downloading the latest resume
-- A small `/parse-test` page for sanity-checking what the backend extracted (kept separate from the main UI)
-
-**Local testing notes**
-
-- This repo is still in a “dev-first” stage: right now we mostly use a single example account to test the resume flow.
-  - Email: `example@example.com`
-  - Password: `12345678`
-  - Name: `John Smith`
-  - (If your local DB is fresh, you may need to register this user once via the UI.)
-- You’ll need MongoDB running for the backend (there’s a Docker Compose setup under `backend/`).
-- Handy routes while testing:
-  - `/` (Dashboard)
-  - `/resume` (upload/download)
-  - `/parse-test` (view extracted text)
-- Resume parsing test page: go to `/parse-test`
-  - It always loads your latest uploaded resume and shows `extracted_text` in a textarea
-  - Useful when you’re iterating on extraction/parsing and want a quick “does this look sane?” check
-- If uploads work but parsing looks empty, double-check backend dependencies (`pdfminer.six`, `python-docx`) are installed in your backend environment.
+- Backend setup and API notes: [backend/README.md](backend/README.md)
+- Frontend setup and UI notes: [Frontend/README.md](Frontend/README.md)

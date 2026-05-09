@@ -1,10 +1,24 @@
-## Frontend (Vite + React)
+# Frontend
 
-## Prereqs
+The frontend is a React + TypeScript application that provides the user-facing experience for authentication, profile editing, resume workflows, AI-assisted job exploration, recruiter search, and account settings.
 
-- Backend API running (default: `http://127.0.0.1:8000`)
-- MongoDB running (auth/profile/resume features)
-- Optional (for AI features): Ollama running (default: `http://127.0.0.1:11434`)
+## What the frontend includes
+
+- Login and registration flows
+- Protected app shell with sidebar navigation
+- Dashboard summary for resume status, feedback, recommendations, and application activity
+- Profile editor with skills and career-interest fields
+- Resume upload, preview, download, and management UI
+- Resume feedback review and notes UI
+- Jobs page for listings, recommendations, application marking, and resume tailoring
+- Applications page for status tracking and filtering
+- Recruiters search page
+- Settings page for language, theme, password, and account controls
+
+## Requirements
+
+- Node.js 18+
+- Backend API running locally or remotely
 
 ## Setup
 
@@ -13,23 +27,59 @@ cd Frontend
 npm install
 ```
 
-## Run
+## Run the development server
 
 ```bash
 cd Frontend
 npm run dev -- --port 5173
 ```
 
-App:
+Open http://localhost:5173.
 
-- `http://localhost:5173`
+## Environment variable
 
-Notes:
+The frontend uses a single environment variable defined in [Frontend/.env.example](.env.example):
 
-- Jobs → AI Recommendations uses `POST /api/recommendations/generate` and will show heuristic ordering if AI is disabled/unavailable.
-- To enable local AI, run `ollama serve` and set `AI_PROVIDER=ollama` in `backend/.env`.
+```dotenv
+VITE_API_BASE_URL=
+```
 
-## Deploy
+- Leave it empty for local development and use the Vite proxy
+- Set it to your deployed backend base URL for hosted environments
 
-- Set `VITE_API_BASE_URL` in your frontend hosting provider to your backend base URL (example: `https://api.example.com`).
-- Keep `VITE_API_BASE_URL` empty for local development with Vite proxy.
+## Main routes
+
+- `/home`: simple landing/health-check page
+- `/login`: login form
+- `/register`: registration form
+- `/`: authenticated dashboard
+- `/profile`: user profile editor
+- `/resume`: resume upload, preview, and file management
+- `/resume-feedback`: feedback generation and review
+- `/jobs`: listing browser, recommendation view, and tailoring flow
+- `/applications`: application status tracking
+- `/recruiters`: recruiter and staffing firm search
+- `/settings`: theme, language, password, and account settings
+
+## Frontend structure
+
+```text
+Frontend/src/
+├── components/   # layout, modal, route guard, error boundary
+├── lib/          # API client, auth helpers, language helpers
+├── pages/        # route-level UI
+├── stores/       # Zustand stores
+└── router.tsx    # route definitions
+```
+
+## Build
+
+```bash
+cd Frontend
+npm run build
+```
+
+## Related docs
+
+- Project overview: [README.md](../README.md)
+- Backend setup: [backend/README.md](../backend/README.md)

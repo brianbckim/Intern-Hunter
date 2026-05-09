@@ -1,9 +1,23 @@
-# Backend (FastAPI)
+# Backend
 
-## Prereqs
+The backend is a FastAPI application that handles authentication, profile data, resume processing, AI-backed features, job recommendation snapshots, application tracking, and recruiter search.
+
+## What the backend provides
+
+- JWT-based authentication and user account management
+- Profile storage for interests, skills, major, and graduation year
+- Resume upload, text extraction, file download, and metadata storage
+- AI-generated resume feedback and saved notes
+- AI-assisted recommendation generation and resume tailoring
+- Application tracking with per-job status updates
+- Read-only job listings loaded from the internship listings JSON file
+- Recruiter search over a large CSV dataset
+
+## Requirements
 
 - Python 3.10+
-- MongoDB (required for auth). Easiest: Docker + `docker compose`.
+- MongoDB
+- Optional: Ollama for local AI-backed features
 
 ## Setup
 
@@ -11,142 +25,94 @@
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-
-# Windows (PowerShell)
-#   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-#   .\.venv\Scripts\Activate.ps1
-# Windows (cmd.exe)
-#   .\.venv\Scripts\activate.bat
-
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-## Run MongoDB (Docker)
+## Start MongoDB
 
 ```bash
 cd backend
 docker compose up -d
 ```
 
-Windows note: install Docker Desktop (WSL2 enabled). Then run the same `docker compose` command from PowerShell in the `backend/` folder.
-
-If you use Colima, make sure Docker points to Colima’s socket (example):
-
-```bash
-export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
-```
-
-## Run API
+## Run the API
 
 ```bash
 cd backend
-# set JWT_SECRET_KEY in .env (recommended) or export it
+source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 ```
 
-Windows note: if `uvicorn` isn’t found, run it via Python:
+The API will be available at http://127.0.0.1:8000.
 
-```bash
-python -m uvicorn app.main:app --reload --port 8000
-```
+## Core environment variables
 
-If you’re using PowerShell and you did NOT activate the venv, you can also run:
-
-```bash
-.\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
-```
-
-## AI provider (Ollama: `llama3.2:3b`)
-
-By default the backend can run with a mock AI provider. To generate real resume feedback and AI-assisted job recommendations locally, use Ollama.
-
-1) Install Ollama:
-
-- macOS (Homebrew):
-
-```bash
-brew install ollama
-```
-
-- Linux:
-
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-- Windows: use the installer from https://ollama.com/
-
-2) Run Ollama and pull the model:
-
-```bash
-ollama serve
-ollama pull llama3.2:3b
-```
-
-3) Set these in `backend/.env`:
+These values are defined in [backend/.env.example](.env.example).
 
 ```dotenv
+APP_NAME=InternHunter
+API_PREFIX=/api
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB=internhunter
+JWT_SECRET_KEY=dev-secret-change-later
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=llama3.2:3b
 OLLAMA_REQUEST_TIMEOUT_SECONDS=300
 ```
 
-4) Start the API as usual (`uvicorn ...`) and use the UI to generate feedback.
+## AI provider behavior
 
-Note: there is no single Python file you run directly for this feature; the entrypoint is the FastAPI app via `uvicorn app.main:app`.
+- `AI_PROVIDER=ollama`: use a local Ollama server for resume feedback, recommendations, and resume tailoring
+- `AI_PROVIDER=mock`: return deterministic mock responses without live AI calls
 
-## Database schema
+### Run Ollama locally
 
-Mongo collections (high-level):
-
-- `users`: auth users (unique `email`)
-- `profiles`: user profile info (unique `user_email`)
-- `resumes`: uploaded resume metadata + extracted text (indexed by `user_email`, `uploaded_at`)
-- `resume_feedback`: AI feedback snapshots + saved notes (indexed by `user_email`, `created_at`, and `resume_id`)
-- `jobs`: normalized job listings (unique `(source, external_id)`)
-- `applications`: application tracking (unique `(user_email, job_source, job_external_id)`, indexed by `(user_email, status)`)
-
-## Local fallback (no Mongo)
-
-If MongoDB is not running, auth/profile endpoints now fall back to a local JSON store for development:
-
-- File path: `backend/data/dev_store.json`
-- Supported in fallback mode: register/login and profile read/update
-- Not supported in fallback mode: resume upload/list and other DB-dependent features
-
-## Endpoints
-
-- `GET /api/health`
-- `GET /api/health/db`
-- `POST /api/auth/register` (email, password, optional full_name)
-- `POST /api/auth/login` (email, password)
-- `POST /api/recommendations/generate` (authenticated; internship recommendations)
-
-Recommendations request body (example):
-
-```json
-{
-	"limit": 20,
-	"candidate_pool": 80,
-	"use_ai": true,
-	"resume_id": null
-}
+```bash
+ollama serve
+ollama pull llama3.2:3b
 ```
 
-Notes:
+## Main API groups
 
-- If `use_ai=true` and `AI_PROVIDER!=mock`, the backend uses the configured AI provider to re-rank and summarize.
-- If AI is disabled/unavailable, it falls back to heuristics and returns `ai_used=false`.
+- `/api/health`: app and DB health checks
+- `/api/auth`: register, login, password change, account deletion
+- `/api/profile`: read and update the current user profile
+- `/api/resumes`: upload, list, fetch, delete, and download resumes
+- `/api/resume-feedback`: generate and review feedback, save notes
+- `/api/recommendations`: generate recommendation snapshots and tailored resumes
+- `/api/applications`: create, update, list, and delete application records
+- `/api/jobs`: read internship listings from the internship listings JSON file
+- `/api/recruiters`: search staffing and recruiter records from the CSV dataset
 
-Quick test:
+## Data sources used by the backend
+
+- Internship listings data: [backend/app/jobs/Intern-Hunter-Listing.json](app/jobs/Intern-Hunter-Listing.json)
+- Recruiter dataset: [list_of_staffing_and_recruiter_businesses.csv](../list_of_staffing_and_recruiter_businesses.csv)
+- Uploaded files: [backend/uploads](uploads)
+
+## High-level storage model
+
+MongoDB collections used by the application include:
+
+- `users`
+- `profiles`
+- `resumes`
+- `resume_feedback`
+- `applications`
+- `recommendations_snapshots`
+- `tailored_resume_snapshots`
+
+## Useful local checks
 
 ```bash
 curl -s http://127.0.0.1:8000/api/health
 curl -s http://127.0.0.1:8000/api/health/db
-
-# Windows notes:
-# - Use `curl.exe` (PowerShell may alias `curl` to `Invoke-WebRequest`).
-# - Alternative: `Invoke-RestMethod http://127.0.0.1:8000/api/health`
 ```
+
+## Related docs
+
+- Project overview: [README.md](../README.md)
+- Frontend setup: [Frontend/README.md](../Frontend/README.md)

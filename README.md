@@ -2,6 +2,8 @@
 
 Intern-Hunter is a full-stack internship search and career support application. It combines account management, resume upload and extraction, AI-assisted resume feedback, AI-assisted job recommendations, recruiter search, and application tracking in a single web app.
 
+> Note: This repository was developed as a team-based senior project. Brian Kim's primary technical contributions are documented in [BRIAN_KIM_CONTRIBUTIONS.md](BRIAN_KIM_CONTRIBUTIONS.md).
+
 ## What is implemented
 
 - Email/password authentication with JWT-based sessions

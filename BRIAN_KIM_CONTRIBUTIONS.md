@@ -43,14 +43,14 @@ These contributions spanned the product vertically rather than staying within a 
 
 ## Notable Commits
 
-- `1cce236` Bootstrapped the backend project structure and FastAPI foundation
-- `db6b393` Defined the core schema and persistence model
-- `673acfd` Built the first full resume upload and parsing flow across backend and frontend
-- `cff2b3e` Reworked the recommendation orchestration flow to reduce repeated inference and improve workflow responsiveness
-- `e1ef1d4` Added execution-mode safety so reranking only runs with a non-mock provider
-- `d0c6a3c` Added ET-based timestamp normalization and freshness logic for long-running workflows
-- `978974e` Refactored model-integration logic into feature-specific modules
-- `1193f37` Added reusable tailoring snapshots and persisted dashboard or application tracking workflows
+- `bbeb43e` Bootstrapped the backend project structure and FastAPI foundation
+- `3a01c62` Defined the core schema and persistence model
+- `ca31321` Built the first full resume upload and parsing flow across backend and frontend
+- `292a03c` Reworked the recommendation orchestration flow to reduce repeated inference and improve workflow responsiveness
+- `28de3ff` Added execution-mode safety so reranking only runs with a non-mock provider
+- `7f2b97e` Added ET-based timestamp normalization and freshness logic for long-running workflows
+- `fb03937` Refactored model-integration logic into feature-specific modules
+- `825aea3` Added reusable tailoring snapshots and persisted dashboard or application tracking workflows
 
 ## Summary
 

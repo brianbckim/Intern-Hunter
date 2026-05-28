@@ -43,14 +43,43 @@ These contributions spanned the product vertically rather than staying within a 
 
 ## Notable Commits
 
-- `bbeb43e` Bootstrapped the backend project structure and FastAPI foundation
-- `3a01c62` Defined the core schema and persistence model
-- `ca31321` Built the first full resume upload and parsing flow across backend and frontend
-- `292a03c` Reworked the recommendation orchestration flow to reduce repeated inference and improve workflow responsiveness
-- `28de3ff` Added execution-mode safety so reranking only runs with a non-mock provider
-- `7f2b97e` Added ET-based timestamp normalization and freshness logic for long-running workflows
-- `fb03937` Refactored model-integration logic into feature-specific modules
-- `825aea3` Added reusable tailoring snapshots and persisted dashboard or application tracking workflows
+Selected representative commits from Brian Kim's contribution history connect his backend infrastructure, AI workflows, recommendation, persistence, and frontend integration work to concrete repository history. Related commits are grouped by functional area where a workflow or subsystem was built across multiple commits.
+
+### Backend Foundation, Auth, and Data Model
+
+- [`bbeb43e`](https://github.com/brianbckim/Intern-Hunter/commit/bbeb43e) Established the initial backend skeleton and project scaffolding, including the FastAPI entrypoint, health route, config/logging, MongoDB connection layer, pluggable AI provider abstraction, Docker Compose, backend requirements, and the route aggregation structure later used by auth, resume, feedback, recommendation, and tracking APIs
+- [`bf8d0a4`](https://github.com/brianbckim/Intern-Hunter/commit/bf8d0a4) Added the initial registration and login backend flow, including auth routes, security helpers, auth schema, JWT-related configuration, and the dependency wiring needed for protected API usage
+- [`3a01c62`](https://github.com/brianbckim/Intern-Hunter/commit/3a01c62) Defined the base Pydantic schema and persistence layer across applications, feedback, jobs, profiles, and resumes, including named MongoDB collections and collection-access patterns that later recommendation, resume, and application-tracking workflows built on
+
+### Resume Upload, Parsing, and Extraction
+
+- [`ee3533f`](https://github.com/brianbckim/Intern-Hunter/commit/ee3533f) Added the authenticated backend resume upload route and the dependency or security wiring needed to support protected file uploads
+- [`ca31321`](https://github.com/brianbckim/Intern-Hunter/commit/ca31321) Connected the frontend and backend into a full resume upload, preview, and parsing workflow, including API bindings, resume screens, parse-test UI, router integration, extraction-service updates, upload storage, and documentation
+- [`98dd123`](https://github.com/brianbckim/Intern-Hunter/commit/98dd123) Extended the extraction pipeline to support legacy `.doc` resume files and updated parse-test coverage, documentation, and requirements accordingly
+
+### Resume Feedback, Provider Integration, and Runtime Setup
+
+- [`2f13218`](https://github.com/brianbckim/Intern-Hunter/commit/2f13218) Built the initial resume feedback workflow across backend routes, AI/provider wiring, local-store note history, frontend feedback UI, router integration, and dashboard or resume-page updates
+- [`742d6c5`](https://github.com/brianbckim/Intern-Hunter/commit/742d6c5) Raised the Ollama timeout in config and `.env.example` to make local model-backed inference more reliable in development workflows
+- [`fb03937`](https://github.com/brianbckim/Intern-Hunter/commit/fb03937) Split the monolithic Ollama integration into dedicated recommendation and resume-feedback modules and updated the related docs or config for clearer runtime separation, maintainability, and debugging
+
+### Recommendation Orchestration, Safety, and Responsiveness
+
+- [`292a03c`](https://github.com/brianbckim/Intern-Hunter/commit/292a03c) Established the initial AI-based recommendation pipeline, including backend heuristic job scoring, the recommendation service layer, listing loader, API route, router registration, and the foundation for later recommendation workflow iterations
+- [`28de3ff`](https://github.com/brianbckim/Intern-Hunter/commit/28de3ff) Added an execution guard so recommendation reranking does not take the non-mock path in mock mode
+- [`3fe5da1`](https://github.com/brianbckim/Intern-Hunter/commit/3fe5da1) Added frontend API bindings and UI integration to turn recommendations into working Dashboard and Jobs workflows
+- [`7f2b97e`](https://github.com/brianbckim/Intern-Hunter/commit/7f2b97e) Added an `America/New_York` time helper, propagated timezone-aware timestamps across persisted workflow data, and extended recommendation freshness and snapshot handling to keep resume, feedback, jobs, and dashboard flows consistent over time
+- [`fd6f456`](https://github.com/brianbckim/Intern-Hunter/commit/fd6f456) Automated feedback and recommendation behavior while expanding the recommendation resource set and service logic behind those workflows
+- [`9c8a637`](https://github.com/brianbckim/Intern-Hunter/commit/9c8a637) Optimized the recommendation generation path and adjusted Dashboard/ResumePage consumers to improve workflow responsiveness
+
+### Resume Tailoring, Persistence, and Application Tracking
+
+- [`e3421cb`](https://github.com/brianbckim/Intern-Hunter/commit/e3421cb) Added recommendation-driven resume tailoring across backend API, client, Jobs-page UI flow, and a dedicated Ollama-based tailoring module for tailoring a resume to a selected role
+- [`825aea3`](https://github.com/brianbckim/Intern-Hunter/commit/825aea3) Turned resume tailoring from a one-time action into a persisted cross-surface workflow with stored snapshots/results, dashboard tracking, jobs/applications integration, and backend/local-store support for the new persisted flow
+
+### Localization
+
+- [`3695ea2`](https://github.com/brianbckim/Intern-Hunter/commit/3695ea2) Added Korean localization support, translation-table and UI-language helpers, and translation stabilization across shared components, auth views, and major frontend pages
 
 ## Summary
 
